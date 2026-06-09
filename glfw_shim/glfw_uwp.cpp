@@ -1,0 +1,2124 @@
+// glfw_uwp.cpp - GLFW WinRT/EGL shim for Minecraft Java UWP (Xbox Series S)
+// Replaces glfw.dll inside lwjgl-glfw-3.3.3-natives-windows.jar.
+
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <string.h>
+#include <roapi.h>
+#include <wrl.h>
+#include <wrl/wrappers/corewrappers.h>
+#include <windows.applicationmodel.core.h>
+#include <windows.foundation.h>
+#include <windows.foundation.collections.h>
+#include <GameInput.h>
+#include <windows.system.h>
+#include <windows.ui.core.h>
+#include <windows.graphics.display.h>
+
+using namespace Microsoft::WRL;
+using namespace Microsoft::WRL::Wrappers;
+using namespace ABI::Windows::ApplicationModel::Core;
+using namespace ABI::Windows::Foundation;
+using namespace ABI::Windows::Foundation::Collections;
+using namespace ABI::Windows::Graphics::Display;
+using namespace ABI::Windows::System;
+using namespace ABI::Windows::UI::Core;
+
+// ---------------------------------------------------------------------------
+// Minimal GLFW 3.3.x types
+// ---------------------------------------------------------------------------
+typedef struct GLFWwindow_  GLFWwindow;
+typedef struct GLFWmonitor_ GLFWmonitor;
+typedef struct GLFWcursor_  GLFWcursor;
+typedef void (*GLFWerrorfun)             (int,const char*);
+typedef void (*GLFWwindowclosefun)       (GLFWwindow*);
+typedef void (*GLFWwindowsizefun)        (GLFWwindow*,int,int);
+typedef void (*GLFWframebuffersizefun)   (GLFWwindow*,int,int);
+typedef void (*GLFWwindowposfun)         (GLFWwindow*,int,int);
+typedef void (*GLFWwindowfocusfun)       (GLFWwindow*,int);
+typedef void (*GLFWwindowiconifyfun)     (GLFWwindow*,int);
+typedef void (*GLFWwindowmaximizefun)    (GLFWwindow*,int);
+typedef void (*GLFWwindowcontentscalefun)(GLFWwindow*,float,float);
+typedef void (*GLFWwindowrefreshfun)     (GLFWwindow*);
+typedef void (*GLFWkeyfun)               (GLFWwindow*,int,int,int,int);
+typedef void (*GLFWcharfun)              (GLFWwindow*,unsigned int);
+typedef void (*GLFWcharmodsfun)          (GLFWwindow*,unsigned int,int);
+typedef void (*GLFWmousebuttonfun)       (GLFWwindow*,int,int,int);
+typedef void (*GLFWcursorposfun)         (GLFWwindow*,double,double);
+typedef void (*GLFWcursorenterfun)       (GLFWwindow*,int);
+typedef void (*GLFWscrollfun)            (GLFWwindow*,double,double);
+typedef void (*GLFWdropfun)              (GLFWwindow*,int,const char**);
+typedef void (*GLFWjoystickfun)          (int,int);
+typedef void (*GLFWmonitorfun)           (GLFWmonitor*,int);
+typedef struct { int width,height,redBits,greenBits,blueBits,refreshRate; } GLFWvidmode;
+typedef struct { unsigned short *red,*green,*blue; unsigned int size; } GLFWgammaramp;
+typedef struct { unsigned char *pixels; int width,height; } GLFWimage;
+typedef struct { unsigned char buttons[15]; float axes[6]; } GLFWgamepadstate;
+
+#define GLFW_TRUE  1
+#define GLFW_FALSE 0
+#define GLFW_NO_ERROR 0
+#define GLFW_ANY_PLATFORM 0x00060000
+#define GLFW_PLATFORM_WIN32 0x00060001
+#define GLFW_PRESS 1
+#define GLFW_RELEASE 0
+#define GLFW_REPEAT 2
+#define GLFW_KEY_UNKNOWN            -1
+#define GLFW_KEY_SPACE             32
+#define GLFW_KEY_0                 48
+#define GLFW_KEY_1                 49
+#define GLFW_KEY_2                 50
+#define GLFW_KEY_3                 51
+#define GLFW_KEY_4                 52
+#define GLFW_KEY_5                 53
+#define GLFW_KEY_6                 54
+#define GLFW_KEY_7                 55
+#define GLFW_KEY_8                 56
+#define GLFW_KEY_9                 57
+#define GLFW_KEY_A                 65
+#define GLFW_KEY_B                 66
+#define GLFW_KEY_C                 67
+#define GLFW_KEY_D                 68
+#define GLFW_KEY_E                 69
+#define GLFW_KEY_F                 70
+#define GLFW_KEY_G                 71
+#define GLFW_KEY_H                 72
+#define GLFW_KEY_I                 73
+#define GLFW_KEY_J                 74
+#define GLFW_KEY_K                 75
+#define GLFW_KEY_L                 76
+#define GLFW_KEY_M                 77
+#define GLFW_KEY_N                 78
+#define GLFW_KEY_O                 79
+#define GLFW_KEY_P                 80
+#define GLFW_KEY_Q                 81
+#define GLFW_KEY_R                 82
+#define GLFW_KEY_S                 83
+#define GLFW_KEY_T                 84
+#define GLFW_KEY_U                 85
+#define GLFW_KEY_V                 86
+#define GLFW_KEY_W                 87
+#define GLFW_KEY_X                 88
+#define GLFW_KEY_Y                 89
+#define GLFW_KEY_Z                 90
+#define GLFW_KEY_ESCAPE           256
+#define GLFW_KEY_ENTER            257
+#define GLFW_KEY_TAB              258
+#define GLFW_KEY_BACKSPACE        259
+#define GLFW_KEY_INSERT           260
+#define GLFW_KEY_DELETE           261
+#define GLFW_KEY_RIGHT            262
+#define GLFW_KEY_LEFT             263
+#define GLFW_KEY_DOWN             264
+#define GLFW_KEY_UP               265
+#define GLFW_KEY_PAGE_UP          266
+#define GLFW_KEY_PAGE_DOWN        267
+#define GLFW_KEY_HOME             268
+#define GLFW_KEY_END              269
+#define GLFW_KEY_CAPS_LOCK        280
+#define GLFW_KEY_SCROLL_LOCK      281
+#define GLFW_KEY_NUM_LOCK         282
+#define GLFW_KEY_PRINT_SCREEN     283
+#define GLFW_KEY_PAUSE            284
+#define GLFW_KEY_F1               290
+#define GLFW_KEY_F2               291
+#define GLFW_KEY_F3               292
+#define GLFW_KEY_F4               293
+#define GLFW_KEY_F5               294
+#define GLFW_KEY_F6               295
+#define GLFW_KEY_F7               296
+#define GLFW_KEY_F8               297
+#define GLFW_KEY_F9               298
+#define GLFW_KEY_F10              299
+#define GLFW_KEY_F11              300
+#define GLFW_KEY_F12              301
+#define GLFW_KEY_KP_0             320
+#define GLFW_KEY_KP_1             321
+#define GLFW_KEY_KP_2             322
+#define GLFW_KEY_KP_3             323
+#define GLFW_KEY_KP_4             324
+#define GLFW_KEY_KP_5             325
+#define GLFW_KEY_KP_6             326
+#define GLFW_KEY_KP_7             327
+#define GLFW_KEY_KP_8             328
+#define GLFW_KEY_KP_9             329
+#define GLFW_KEY_KP_DECIMAL       330
+#define GLFW_KEY_KP_DIVIDE        331
+#define GLFW_KEY_KP_MULTIPLY      332
+#define GLFW_KEY_KP_SUBTRACT      333
+#define GLFW_KEY_KP_ADD           334
+#define GLFW_KEY_LEFT_SHIFT       340
+#define GLFW_KEY_LEFT_CONTROL     341
+#define GLFW_KEY_LEFT_ALT         342
+#define GLFW_KEY_LEFT_SUPER       343
+#define GLFW_KEY_RIGHT_SHIFT      344
+#define GLFW_KEY_RIGHT_CONTROL    345
+#define GLFW_KEY_RIGHT_ALT        346
+#define GLFW_KEY_RIGHT_SUPER      347
+#define GLFW_KEY_MENU             348
+#define GLFW_MOD_SHIFT           0x0001
+#define GLFW_MOD_CONTROL         0x0002
+#define GLFW_MOD_ALT             0x0004
+#define GLFW_MOD_SUPER           0x0008
+#define GLFW_MOD_CAPS_LOCK       0x0010
+#define GLFW_MOD_NUM_LOCK        0x0020
+#define GLFW_CLIENT_API            0x00022001
+#define GLFW_OPENGL_API            0x00030001
+#define GLFW_CONTEXT_VERSION_MAJOR 0x00022002
+#define GLFW_CONTEXT_VERSION_MINOR 0x00022003
+#define GLFW_OPENGL_PROFILE        0x00022008
+#define GLFW_CONTEXT_CREATION_API  0x0002200B
+#define GLFW_VISIBLE   0x00020004
+#define GLFW_FOCUSED   0x00020001
+#define GLFW_ICONIFIED 0x00020002
+#define GLFW_MAXIMIZED 0x00020008
+#define GLFW_DECORATED 0x00020005
+#define GLFW_RESIZABLE 0x00020003
+#define GLFW_HOVERED   0x0002000B
+#define GLFW_OPENGL_CORE_PROFILE   0x00032001
+#define GLFW_OPENGL_COMPAT_PROFILE 0x00032002
+#define GLFW_NATIVE_CONTEXT_API    0x00036001
+#define GLFW_EGL_CONTEXT_API       0x00036002
+#define GLFW_CURSOR          0x00033001
+#define GLFW_CURSOR_NORMAL   0x00034001
+#define GLFW_CURSOR_DISABLED 0x00034003
+#define GLFW_CONNECTED       0x00040001
+#define GLFW_DISCONNECTED    0x00040002
+#define GLFW_JOYSTICK_1      0
+#define GLFW_GAMEPAD_BUTTON_A             0
+#define GLFW_GAMEPAD_BUTTON_B             1
+#define GLFW_GAMEPAD_BUTTON_X             2
+#define GLFW_GAMEPAD_BUTTON_Y             3
+#define GLFW_GAMEPAD_BUTTON_LEFT_BUMPER   4
+#define GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER  5
+#define GLFW_GAMEPAD_BUTTON_BACK          6
+#define GLFW_GAMEPAD_BUTTON_START         7
+#define GLFW_GAMEPAD_BUTTON_GUIDE         8
+#define GLFW_GAMEPAD_BUTTON_LEFT_THUMB    9
+#define GLFW_GAMEPAD_BUTTON_RIGHT_THUMB   10
+#define GLFW_GAMEPAD_BUTTON_DPAD_UP       11
+#define GLFW_GAMEPAD_BUTTON_DPAD_RIGHT    12
+#define GLFW_GAMEPAD_BUTTON_DPAD_DOWN     13
+#define GLFW_GAMEPAD_BUTTON_DPAD_LEFT     14
+#define GLFW_GAMEPAD_AXIS_LEFT_X          0
+#define GLFW_GAMEPAD_AXIS_LEFT_Y          1
+#define GLFW_GAMEPAD_AXIS_RIGHT_X         2
+#define GLFW_GAMEPAD_AXIS_RIGHT_Y         3
+#define GLFW_GAMEPAD_AXIS_LEFT_TRIGGER    4
+#define GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER   5
+
+#define GL_VENDOR   0x1F00
+#define GL_RENDERER 0x1F01
+#define GL_VERSION  0x1F02
+
+// ---------------------------------------------------------------------------
+// Minimal EGL types and constants
+// ---------------------------------------------------------------------------
+typedef void* EGLDisplay;
+typedef void* EGLSurface;
+typedef void* EGLContext;
+typedef void* EGLConfig;
+typedef void* EGLNativeDisplayType;
+typedef IInspectable* EGLNativeWindowType;
+typedef int32_t EGLint;
+typedef int32_t EGLBoolean;
+typedef uint32_t EGLenum;
+
+#define EGL_FALSE 0
+#define EGL_TRUE 1
+#define EGL_DEFAULT_DISPLAY ((EGLNativeDisplayType)0)
+#define EGL_NO_DISPLAY ((EGLDisplay)0)
+#define EGL_NO_SURFACE ((EGLSurface)0)
+#define EGL_NO_CONTEXT ((EGLContext)0)
+#define EGL_NONE 0x3038
+#define EGL_RED_SIZE 0x3024
+#define EGL_GREEN_SIZE 0x3023
+#define EGL_BLUE_SIZE 0x3022
+#define EGL_ALPHA_SIZE 0x3021
+#define EGL_DEPTH_SIZE 0x3025
+#define EGL_STENCIL_SIZE 0x3026
+#define EGL_SURFACE_TYPE 0x3033
+#define EGL_RENDERABLE_TYPE 0x3040
+#define EGL_WINDOW_BIT 0x0004
+#define EGL_OPENGL_BIT 0x0008
+#define EGL_OPENGL_ES2_BIT 0x0004
+#define EGL_OPENGL_ES3_BIT_KHR 0x00000040
+#define EGL_OPENGL_API 0x30A2
+#define EGL_OPENGL_ES_API 0x30A0
+#define EGL_VENDOR 0x3053
+#define EGL_VERSION 0x3054
+#define EGL_CONTEXT_CLIENT_VERSION 0x3098
+#define EGL_CONTEXT_MAJOR_VERSION_KHR 0x3098
+#define EGL_CONTEXT_MINOR_VERSION_KHR 0x30FB
+#define EGL_CONTEXT_OPENGL_PROFILE_MASK_KHR 0x30FD
+#define EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT_KHR 0x00000001
+#define EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT_KHR 0x00000002
+
+typedef EGLDisplay (WINAPI* PFN_eglGetDisplay)(EGLNativeDisplayType);
+typedef EGLDisplay (WINAPI* PFN_eglGetPlatformDisplay)(EGLenum, void*, const EGLint*);
+typedef EGLBoolean (WINAPI* PFN_eglInitialize)(EGLDisplay, EGLint*, EGLint*);
+typedef EGLBoolean (WINAPI* PFN_eglTerminate)(EGLDisplay);
+typedef EGLBoolean (WINAPI* PFN_eglBindAPI)(EGLenum);
+typedef EGLBoolean (WINAPI* PFN_eglChooseConfig)(EGLDisplay, const EGLint*, EGLConfig*, EGLint, EGLint*);
+typedef EGLSurface (WINAPI* PFN_eglCreateWindowSurface)(EGLDisplay, EGLConfig, EGLNativeWindowType, const EGLint*);
+typedef EGLSurface (WINAPI* PFN_eglCreatePlatformWindowSurface)(EGLDisplay, EGLConfig, void*, const EGLint*);
+typedef EGLContext (WINAPI* PFN_eglCreateContext)(EGLDisplay, EGLConfig, EGLContext, const EGLint*);
+typedef EGLBoolean (WINAPI* PFN_eglDestroyContext)(EGLDisplay, EGLContext);
+typedef EGLBoolean (WINAPI* PFN_eglDestroySurface)(EGLDisplay, EGLSurface);
+typedef EGLBoolean (WINAPI* PFN_eglMakeCurrent)(EGLDisplay, EGLSurface, EGLSurface, EGLContext);
+typedef EGLBoolean (WINAPI* PFN_eglSwapBuffers)(EGLDisplay, EGLSurface);
+typedef EGLBoolean (WINAPI* PFN_eglSwapInterval)(EGLDisplay, EGLint);
+typedef const char* (WINAPI* PFN_eglQueryString)(EGLDisplay, EGLint);
+typedef void* (WINAPI* PFN_eglGetProcAddress)(const char*);
+typedef EGLint (WINAPI* PFN_eglGetError)(void);
+typedef EGLBoolean (WINAPI* PFN_eglGetConfigAttrib)(EGLDisplay, EGLConfig, EGLint, EGLint*);
+typedef const unsigned char* (APIENTRY* PFN_glGetString)(unsigned int);
+typedef void (*PFN_proc_init)(void);
+
+// ---------------------------------------------------------------------------
+// Global state
+// ---------------------------------------------------------------------------
+static constexpr wchar_t kEGLNativeWindowTypeProperty[] = L"EGLNativeWindowTypeProperty";
+static constexpr wchar_t kEGLRenderSurfaceSizeProperty[] = L"EGLRenderSurfaceSizeProperty";
+
+static EGLDisplay g_eglDisplay = EGL_NO_DISPLAY;
+static EGLSurface g_eglSurface = EGL_NO_SURFACE;
+static EGLContext g_eglContext = EGL_NO_CONTEXT;
+static EGLConfig  g_eglConfig = nullptr;
+static DWORD g_eglContextThreadId = 0;
+static HMODULE g_libEGL = NULL;
+static HMODULE g_opengl32 = NULL;
+static HMODULE g_libGLESv2 = NULL;
+static BOOL g_graphicsRuntimeUsesGles = FALSE;
+static BOOL g_initialised = FALSE;
+static BOOL g_should_close = FALSE;
+static int g_window_width = 1920;
+static int g_window_height = 1080;
+static int g_framebuffer_width = 1920;
+static int g_framebuffer_height = 1080;
+static float g_content_scale_x = 1.0f;
+static float g_content_scale_y = 1.0f;
+static int g_swap_log_count = 0;
+static int g_poll_log_count = 0;
+static int g_proc_log_count = 0;
+static int g_wait_log_count = 0;
+static int g_key_log_count = 0;
+static int g_controller_log_count = 0;
+static int g_gamepad_query_log_count = 0;
+static int g_current_context_log_count = 0;
+static int g_window_attrib_log_count = 0;
+static int g_extension_log_count = 0;
+
+static PFN_eglGetDisplay p_eglGetDisplay = nullptr;
+static PFN_eglGetPlatformDisplay p_eglGetPlatformDisplay = nullptr;
+static PFN_eglInitialize p_eglInitialize = nullptr;
+static PFN_eglTerminate p_eglTerminate = nullptr;
+static PFN_eglBindAPI p_eglBindAPI = nullptr;
+static PFN_eglChooseConfig p_eglChooseConfig = nullptr;
+static PFN_eglCreateWindowSurface p_eglCreateWindowSurface = nullptr;
+static PFN_eglCreatePlatformWindowSurface p_eglCreatePlatformWindowSurface = nullptr;
+static PFN_eglCreateContext p_eglCreateContext = nullptr;
+static PFN_eglDestroyContext p_eglDestroyContext = nullptr;
+static PFN_eglDestroySurface p_eglDestroySurface = nullptr;
+static PFN_eglMakeCurrent p_eglMakeCurrent = nullptr;
+static PFN_eglSwapBuffers p_eglSwapBuffers = nullptr;
+static PFN_eglSwapInterval p_eglSwapInterval = nullptr;
+static PFN_eglQueryString p_eglQueryString = nullptr;
+static PFN_eglGetProcAddress p_eglGetProcAddress = nullptr;
+static PFN_eglGetError p_eglGetError = nullptr;
+static PFN_eglGetConfigAttrib p_eglGetConfigAttrib = nullptr;
+
+static GLFWerrorfun           g_error_cb       = NULL;
+static GLFWframebuffersizefun g_fbsize_cb      = NULL;
+static GLFWwindowposfun       g_winpos_cb      = NULL;
+static GLFWwindowsizefun      g_winsize_cb     = NULL;
+static GLFWwindowclosefun     g_winclose_cb    = NULL;
+static GLFWwindowrefreshfun   g_winrefresh_cb  = NULL;
+static GLFWkeyfun             g_key_cb         = NULL;
+static GLFWcharfun            g_char_cb        = NULL;
+static GLFWcharmodsfun        g_charmods_cb    = NULL;
+static GLFWmousebuttonfun     g_mousebutton_cb = NULL;
+static GLFWcursorposfun       g_cursorpos_cb   = NULL;
+static GLFWscrollfun          g_scroll_cb      = NULL;
+static GLFWcursorenterfun     g_cursorenter_cb = NULL;
+static GLFWwindowfocusfun     g_focus_cb       = NULL;
+static GLFWwindowiconifyfun   g_iconify_cb     = NULL;
+static GLFWwindowmaximizefun  g_maximize_cb    = NULL;
+static GLFWwindowcontentscalefun g_contentscale_cb = NULL;
+static GLFWdropfun            g_drop_cb        = NULL;
+static GLFWjoystickfun        g_joystick_cb    = NULL;
+static GLFWmonitorfun         g_monitor_cb     = NULL;
+using CoreWindowKeyHandler = ABI::Windows::Foundation::__FITypedEventHandler_2_Windows__CUI__CCore__CCoreWindow_Windows__CUI__CCore__CKeyEventArgs_t;
+using CoreWindowCharHandler = ABI::Windows::Foundation::__FITypedEventHandler_2_Windows__CUI__CCore__CCoreWindow_Windows__CUI__CCore__CCharacterReceivedEventArgs_t;
+using CoreWindowVisibilityHandler = ABI::Windows::Foundation::__FITypedEventHandler_2_Windows__CUI__CCore__CCoreWindow_Windows__CUI__CCore__CVisibilityChangedEventArgs_t;
+using CoreWindowActivatedHandler = ABI::Windows::Foundation::__FITypedEventHandler_2_Windows__CUI__CCore__CCoreWindow_Windows__CUI__CCore__CWindowActivatedEventArgs_t;
+static ComPtr<CoreWindowKeyHandler> g_keyDownHandler;
+static ComPtr<CoreWindowKeyHandler> g_keyUpHandler;
+static ComPtr<CoreWindowCharHandler> g_charReceivedHandler;
+static ComPtr<CoreWindowVisibilityHandler> g_visibilityHandler;
+static ComPtr<CoreWindowActivatedHandler> g_activatedHandler;
+static ComPtr<IGameInput> g_gameInput;
+static EventRegistrationToken g_keyDownToken = {};
+static EventRegistrationToken g_keyUpToken = {};
+static EventRegistrationToken g_charReceivedToken = {};
+static EventRegistrationToken g_visibilityToken = {};
+static EventRegistrationToken g_activatedToken = {};
+static bool g_keyboardHooksInstalled = false;
+static bool g_lifecycleHooksInstalled = false;
+static bool g_gameInputCreateTried = false;
+static bool g_gamepad_present = false;
+static bool g_haveGameInputGamepadState = false;
+static bool g_haveGameInputPollCache = false;
+static ULONGLONG g_lastGameInputPollMs = 0;
+static volatile LONG g_coreWindowVisibleForInput = 1;
+static volatile LONG g_coreWindowActivatedForInput = 1;
+static volatile LONGLONG g_coreWindowInputStateChangedMs = 0;
+static bool g_legacyControllerModModeLogged = false;
+static bool g_lastLegacyControllerModMode = false;
+static unsigned char g_key_state[512] = {};
+static GameInputGamepadState g_lastGameInputGamepadState = {};
+static GLFWgamepadstate g_gamepad_state = {};
+static float g_joystick_axes[6] = {};
+static unsigned char g_joystick_buttons[15] = {};
+static void* g_joystick_user_pointer = NULL;
+
+static ComPtr<ICoreWindow> g_coreWindow;
+static ComPtr<ICoreDispatcher> g_dispatcher;
+static ComPtr<IInspectable> g_nativeWindowPropertySet;
+
+struct FakeWindow {
+    DWORD magic;
+    int width;
+    int height;
+    BOOL should_close;
+    void* user_pointer;
+};
+static FakeWindow g_fake_window;
+static GLFWvidmode g_vidmode = {1920,1080,8,8,8,60};
+
+// ---------------------------------------------------------------------------
+// Logging
+// ---------------------------------------------------------------------------
+static wchar_t g_log_path[MAX_PATH];
+
+static void ShimLog(const char* fmt, ...) {
+    if (!g_log_path[0]) return;
+    FILE* f = NULL;
+    _wfopen_s(&f, g_log_path, L"a");
+    if (!f) return;
+    SYSTEMTIME st;
+    GetLocalTime(&st);
+    fprintf(f,"[%02d:%02d:%02d.%03d] [glfw_uwp] ",st.wHour,st.wMinute,st.wSecond,st.wMilliseconds);
+    va_list va;
+    va_start(va,fmt);
+    vfprintf(f,fmt,va);
+    va_end(va);
+    fprintf(f,"\n");
+    fclose(f);
+}
+
+static void GetExeDir(wchar_t* out, int cch) {
+    GetModuleFileNameW(NULL,out,cch);
+    wchar_t* sl = wcsrchr(out,L'\\');
+    if (sl) *sl = L'\0';
+}
+
+static void GetRuntimeDir(wchar_t* out, int cch) {
+    DWORD len = GetEnvironmentVariableW(L"MC_RUNTIME_DIR", out, cch);
+    if (len > 0 && len < (DWORD)cch) return;
+    GetExeDir(out, cch);
+}
+
+static void JoinPath(wchar_t* out, int cch, const wchar_t* dir, const wchar_t* name) {
+    if (!dir || !*dir) {
+        swprintf_s(out, cch, L"%s", name ? name : L"");
+        return;
+    }
+    if (!name || !*name) {
+        swprintf_s(out, cch, L"%s", dir);
+        return;
+    }
+    swprintf_s(out, cch, L"%s\\%s", dir, name);
+}
+
+static void GetGraphicsRuntimeName(wchar_t* out, int cch) {
+    DWORD len = GetEnvironmentVariableW(L"MC_GRAPHICS_RUNTIME", out, cch);
+    if (len == 0 || len >= (DWORD)cch) {
+        swprintf_s(out, cch, L"mesa");
+        return;
+    }
+
+    if (_wcsicmp(out, L"series") == 0 || _wcsicmp(out, L"seriesx") == 0 ||
+        _wcsicmp(out, L"seriess") == 0 || _wcsicmp(out, L"auto") == 0) {
+        swprintf_s(out, cch, L"mesa");
+    }
+}
+
+static bool EnvFlagEnabled(const wchar_t* name) {
+    wchar_t value[32] = {};
+    DWORD len = GetEnvironmentVariableW(name, value, ARRAYSIZE(value));
+    if (len == 0 || len >= ARRAYSIZE(value)) return false;
+    return _wcsicmp(value, L"1") == 0 ||
+        _wcsicmp(value, L"true") == 0 ||
+        _wcsicmp(value, L"yes") == 0 ||
+        _wcsicmp(value, L"on") == 0;
+}
+
+static bool DirectoryExists(const wchar_t* path) {
+    const DWORD attrs = GetFileAttributesW(path);
+    return attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+static bool GraphicsRuntimeReady(const wchar_t* path) {
+    if (!DirectoryExists(path)) return false;
+
+    wchar_t glPath[MAX_PATH];
+    wchar_t eglPath[MAX_PATH];
+    JoinPath(glPath, MAX_PATH, path, L"opengl32.dll");
+    JoinPath(eglPath, MAX_PATH, path, L"libEGL.dll");
+    return GetFileAttributesW(glPath) != INVALID_FILE_ATTRIBUTES &&
+        GetFileAttributesW(eglPath) != INVALID_FILE_ATTRIBUTES;
+}
+
+static bool SelectGraphicsRuntimeDir(
+    wchar_t* runtimeDir,
+    int runtimeDirCch,
+    wchar_t* packagePrefix,
+    int packagePrefixCch) {
+    wchar_t exeDir[MAX_PATH];
+    GetExeDir(exeDir, MAX_PATH);
+
+    wchar_t requested[32];
+    GetGraphicsRuntimeName(requested, (int)(sizeof(requested) / sizeof(requested[0])));
+    g_graphicsRuntimeUsesGles = (_wcsicmp(requested, L"xboxone") == 0);
+
+    wchar_t candidate[MAX_PATH];
+    swprintf_s(candidate, L"%s\\graphics\\%s", exeDir, requested);
+    if (GraphicsRuntimeReady(candidate)) {
+        swprintf_s(runtimeDir, runtimeDirCch, L"%s", candidate);
+        swprintf_s(packagePrefix, packagePrefixCch, L"graphics\\%s", requested);
+        ShimLog("Graphics runtime selected: %S (%S)", requested, runtimeDir);
+        return true;
+    }
+
+    swprintf_s(candidate, L"%s\\natives\\graphics\\%s", exeDir, requested);
+    if (GraphicsRuntimeReady(candidate)) {
+        swprintf_s(runtimeDir, runtimeDirCch, L"%s", candidate);
+        swprintf_s(packagePrefix, packagePrefixCch, L"natives\\graphics\\%s", requested);
+        ShimLog("Graphics runtime selected: %S (%S)", requested, runtimeDir);
+        return true;
+    }
+
+    // Legacy layout: older packages copied Mesa DLLs directly beside the exe
+    // or under natives. Keep this so the Series path remains compatible.
+    swprintf_s(runtimeDir, runtimeDirCch, L"%s", exeDir);
+    swprintf_s(packagePrefix, packagePrefixCch, L"");
+    g_graphicsRuntimeUsesGles = FALSE;
+    ShimLog("Graphics runtime folder missing for %S; using legacy Mesa lookup", requested);
+    return true;
+}
+
+static void RuntimeDllPath(
+    const wchar_t* runtimeDir,
+    const wchar_t* packagePrefix,
+    const wchar_t* dll,
+    wchar_t* absolutePath,
+    int absolutePathCch,
+    wchar_t* packagedPath,
+    int packagedPathCch) {
+    JoinPath(absolutePath, absolutePathCch, runtimeDir, dll);
+    if (packagePrefix && *packagePrefix) {
+        swprintf_s(packagedPath, packagedPathCch, L"%s\\%s", packagePrefix, dll);
+    } else {
+        swprintf_s(packagedPath, packagedPathCch, L"%s", dll);
+    }
+}
+
+static HMODULE LoadPackagedOrFile(const wchar_t* packagedPath, const wchar_t* absolutePath, const char* label) {
+    HMODULE module = nullptr;
+    if (packagedPath && *packagedPath) {
+        module = LoadPackagedLibrary(packagedPath, 0);
+        if (module) {
+            ShimLog("LoadPackagedLibrary(%s) => %p", label, (void*)module);
+            return module;
+        }
+        ShimLog("LoadPackagedLibrary(%s) failed err=%u", label, GetLastError());
+    }
+
+    if (absolutePath && *absolutePath) {
+        module = LoadLibraryW(absolutePath);
+        if (module) {
+            ShimLog("LoadLibraryW(%s) => %p", label, (void*)module);
+            return module;
+        }
+        ShimLog("LoadLibraryW(%s) failed err=%u", label, GetLastError());
+    }
+
+    return nullptr;
+}
+
+static FARPROC ResolveProc(HMODULE module, const char* name) {
+    FARPROC proc = module ? GetProcAddress(module, name) : NULL;
+    ShimLog("  %s=%p", name, (void*)proc);
+    return proc;
+}
+
+static void ReportEglError(const char* label) {
+    const EGLint err = p_eglGetError ? p_eglGetError() : 0;
+    ShimLog("%s failed eglError=0x%04X", label, err);
+}
+
+static int MapVirtualKeyToGlfw(VirtualKey key) {
+    switch (key) {
+    case VirtualKey_Space: return GLFW_KEY_SPACE;
+    case VirtualKey_Number0: return GLFW_KEY_0;
+    case VirtualKey_Number1: return GLFW_KEY_1;
+    case VirtualKey_Number2: return GLFW_KEY_2;
+    case VirtualKey_Number3: return GLFW_KEY_3;
+    case VirtualKey_Number4: return GLFW_KEY_4;
+    case VirtualKey_Number5: return GLFW_KEY_5;
+    case VirtualKey_Number6: return GLFW_KEY_6;
+    case VirtualKey_Number7: return GLFW_KEY_7;
+    case VirtualKey_Number8: return GLFW_KEY_8;
+    case VirtualKey_Number9: return GLFW_KEY_9;
+    case VirtualKey_A: return GLFW_KEY_A;
+    case VirtualKey_B: return GLFW_KEY_B;
+    case VirtualKey_C: return GLFW_KEY_C;
+    case VirtualKey_D: return GLFW_KEY_D;
+    case VirtualKey_E: return GLFW_KEY_E;
+    case VirtualKey_F: return GLFW_KEY_F;
+    case VirtualKey_G: return GLFW_KEY_G;
+    case VirtualKey_H: return GLFW_KEY_H;
+    case VirtualKey_I: return GLFW_KEY_I;
+    case VirtualKey_J: return GLFW_KEY_J;
+    case VirtualKey_K: return GLFW_KEY_K;
+    case VirtualKey_L: return GLFW_KEY_L;
+    case VirtualKey_M: return GLFW_KEY_M;
+    case VirtualKey_N: return GLFW_KEY_N;
+    case VirtualKey_O: return GLFW_KEY_O;
+    case VirtualKey_P: return GLFW_KEY_P;
+    case VirtualKey_Q: return GLFW_KEY_Q;
+    case VirtualKey_R: return GLFW_KEY_R;
+    case VirtualKey_S: return GLFW_KEY_S;
+    case VirtualKey_T: return GLFW_KEY_T;
+    case VirtualKey_U: return GLFW_KEY_U;
+    case VirtualKey_V: return GLFW_KEY_V;
+    case VirtualKey_W: return GLFW_KEY_W;
+    case VirtualKey_X: return GLFW_KEY_X;
+    case VirtualKey_Y: return GLFW_KEY_Y;
+    case VirtualKey_Z: return GLFW_KEY_Z;
+    case VirtualKey_Left: return GLFW_KEY_LEFT;
+    case VirtualKey_Right: return GLFW_KEY_RIGHT;
+    case VirtualKey_Up: return GLFW_KEY_UP;
+    case VirtualKey_Down: return GLFW_KEY_DOWN;
+    case VirtualKey_Tab: return GLFW_KEY_TAB;
+    case VirtualKey_Enter: return GLFW_KEY_ENTER;
+    case VirtualKey_Back: return GLFW_KEY_BACKSPACE;
+    case VirtualKey_Escape: return GLFW_KEY_ESCAPE;
+    case VirtualKey_PageUp: return GLFW_KEY_PAGE_UP;
+    case VirtualKey_PageDown: return GLFW_KEY_PAGE_DOWN;
+    case VirtualKey_Home: return GLFW_KEY_HOME;
+    case VirtualKey_End: return GLFW_KEY_END;
+    case VirtualKey_Insert: return GLFW_KEY_INSERT;
+    case VirtualKey_Delete: return GLFW_KEY_DELETE;
+    case VirtualKey_CapitalLock: return GLFW_KEY_CAPS_LOCK;
+    case VirtualKey_Scroll: return GLFW_KEY_SCROLL_LOCK;
+    case VirtualKey_NumberKeyLock: return GLFW_KEY_NUM_LOCK;
+    case VirtualKey_Snapshot: return GLFW_KEY_PRINT_SCREEN;
+    case VirtualKey_Pause: return GLFW_KEY_PAUSE;
+    case VirtualKey_F1: return GLFW_KEY_F1;
+    case VirtualKey_F2: return GLFW_KEY_F2;
+    case VirtualKey_F3: return GLFW_KEY_F3;
+    case VirtualKey_F4: return GLFW_KEY_F4;
+    case VirtualKey_F5: return GLFW_KEY_F5;
+    case VirtualKey_F6: return GLFW_KEY_F6;
+    case VirtualKey_F7: return GLFW_KEY_F7;
+    case VirtualKey_F8: return GLFW_KEY_F8;
+    case VirtualKey_F9: return GLFW_KEY_F9;
+    case VirtualKey_F10: return GLFW_KEY_F10;
+    case VirtualKey_F11: return GLFW_KEY_F11;
+    case VirtualKey_F12: return GLFW_KEY_F12;
+    case VirtualKey_NumberPad0: return GLFW_KEY_KP_0;
+    case VirtualKey_NumberPad1: return GLFW_KEY_KP_1;
+    case VirtualKey_NumberPad2: return GLFW_KEY_KP_2;
+    case VirtualKey_NumberPad3: return GLFW_KEY_KP_3;
+    case VirtualKey_NumberPad4: return GLFW_KEY_KP_4;
+    case VirtualKey_NumberPad5: return GLFW_KEY_KP_5;
+    case VirtualKey_NumberPad6: return GLFW_KEY_KP_6;
+    case VirtualKey_NumberPad7: return GLFW_KEY_KP_7;
+    case VirtualKey_NumberPad8: return GLFW_KEY_KP_8;
+    case VirtualKey_NumberPad9: return GLFW_KEY_KP_9;
+    case VirtualKey_Decimal: return GLFW_KEY_KP_DECIMAL;
+    case VirtualKey_Divide: return GLFW_KEY_KP_DIVIDE;
+    case VirtualKey_Multiply: return GLFW_KEY_KP_MULTIPLY;
+    case VirtualKey_Subtract: return GLFW_KEY_KP_SUBTRACT;
+    case VirtualKey_Add: return GLFW_KEY_KP_ADD;
+    case VirtualKey_LeftShift: return GLFW_KEY_LEFT_SHIFT;
+    case VirtualKey_RightShift: return GLFW_KEY_RIGHT_SHIFT;
+    case VirtualKey_LeftControl: return GLFW_KEY_LEFT_CONTROL;
+    case VirtualKey_RightControl: return GLFW_KEY_RIGHT_CONTROL;
+    case VirtualKey_LeftMenu: return GLFW_KEY_LEFT_ALT;
+    case VirtualKey_RightMenu: return GLFW_KEY_RIGHT_ALT;
+    case VirtualKey_LeftWindows: return GLFW_KEY_LEFT_SUPER;
+    case VirtualKey_RightWindows: return GLFW_KEY_RIGHT_SUPER;
+    case VirtualKey_Menu: return GLFW_KEY_MENU;
+    default:
+        return GLFW_KEY_UNKNOWN;
+    }
+}
+
+static int CurrentGlfwMods() {
+    int mods = 0;
+    if (g_key_state[GLFW_KEY_LEFT_SHIFT] || g_key_state[GLFW_KEY_RIGHT_SHIFT]) mods |= GLFW_MOD_SHIFT;
+    if (g_key_state[GLFW_KEY_LEFT_CONTROL] || g_key_state[GLFW_KEY_RIGHT_CONTROL]) mods |= GLFW_MOD_CONTROL;
+    if (g_key_state[GLFW_KEY_LEFT_ALT] || g_key_state[GLFW_KEY_RIGHT_ALT]) mods |= GLFW_MOD_ALT;
+    if (g_key_state[GLFW_KEY_LEFT_SUPER] || g_key_state[GLFW_KEY_RIGHT_SUPER]) mods |= GLFW_MOD_SUPER;
+    if (g_key_state[GLFW_KEY_CAPS_LOCK]) mods |= GLFW_MOD_CAPS_LOCK;
+    if (g_key_state[GLFW_KEY_NUM_LOCK]) mods |= GLFW_MOD_NUM_LOCK;
+    return mods;
+}
+
+static void UpdateKeyState(int key, int action) {
+    if (key < 0 || key >= (int)sizeof(g_key_state)) return;
+    g_key_state[key] = (action == GLFW_RELEASE) ? GLFW_RELEASE : GLFW_PRESS;
+}
+
+static void ClearKeyboardState() {
+    ZeroMemory(g_key_state, sizeof(g_key_state));
+}
+
+static void ClearGamepadState() {
+    ZeroMemory(&g_gamepad_state, sizeof(g_gamepad_state));
+    ZeroMemory(g_joystick_axes, sizeof(g_joystick_axes));
+    ZeroMemory(g_joystick_buttons, sizeof(g_joystick_buttons));
+}
+
+static void MarkCoreWindowInputStateChanged() {
+    InterlockedExchange64(&g_coreWindowInputStateChangedMs, (LONGLONG)GetTickCount64());
+}
+
+static bool CoreWindowAcceptsInput() {
+    if (InterlockedCompareExchange(&g_coreWindowVisibleForInput, 1, 1) == 0 ||
+        InterlockedCompareExchange(&g_coreWindowActivatedForInput, 1, 1) == 0) {
+        return false;
+    }
+    const LONGLONG changed = InterlockedCompareExchange64(&g_coreWindowInputStateChangedMs, 0, 0);
+    return changed == 0 || ((LONGLONG)GetTickCount64() - changed) >= 250;
+}
+
+static void DispatchKeyEvent(VirtualKey virtualKey, const CorePhysicalKeyStatus& status, int action) {
+    if (!CoreWindowAcceptsInput()) {
+        ClearKeyboardState();
+        return;
+    }
+
+    const int glfwKey = MapVirtualKeyToGlfw(virtualKey);
+    if (glfwKey == GLFW_KEY_UNKNOWN) return;
+
+    const int glfwAction = (action == GLFW_PRESS && status.WasKeyDown) ? GLFW_REPEAT : action;
+    UpdateKeyState(glfwKey, glfwAction);
+    const int mods = CurrentGlfwMods();
+    if (g_key_log_count < 24) {
+        ++g_key_log_count;
+        ShimLog("Key event vk=%d glfw=%d action=%d scancode=%u mods=0x%X repeat=%u",
+            (int)virtualKey, glfwKey, glfwAction, status.ScanCode, mods, status.RepeatCount);
+    }
+    if (g_key_cb) {
+        g_key_cb((GLFWwindow*)&g_fake_window, glfwKey, (int)status.ScanCode, glfwAction, mods);
+    }
+}
+
+static void DispatchCharEvent(unsigned int codepoint) {
+    if (!CoreWindowAcceptsInput()) return;
+    if (codepoint == 0) return;
+    if (g_char_cb) {
+        g_char_cb((GLFWwindow*)&g_fake_window, codepoint);
+    }
+    if (g_charmods_cb) {
+        g_charmods_cb((GLFWwindow*)&g_fake_window, codepoint, CurrentGlfwMods());
+    }
+}
+
+static bool EnsureGameInput() {
+    if (g_gameInput) return true;
+    if (g_gameInputCreateTried) return false;
+
+    g_gameInputCreateTried = true;
+    HRESULT hr = GameInputCreate(g_gameInput.GetAddressOf());
+    if (FAILED(hr) || !g_gameInput) {
+        ShimLog("GameInputCreate failed hr=0x%08X", hr);
+        return false;
+    }
+
+    g_gameInput->SetFocusPolicy(GameInputExclusiveForegroundInput);
+    ShimLog("GameInput initialized");
+    return true;
+}
+
+static float ClampGamepadAxis(float value) {
+    if (value < -1.0f) return -1.0f;
+    if (value > 1.0f) return 1.0f;
+    return value;
+}
+
+static float AbsGamepadAxis(float value) {
+    return value < 0.0f ? -value : value;
+}
+
+static bool LegacyControllerModMode() {
+    const bool enabled = EnvFlagEnabled(L"MC_LEGACY_CONTROLLER_MOD");
+    if (!g_legacyControllerModModeLogged || enabled != g_lastLegacyControllerModMode) {
+        g_legacyControllerModModeLogged = true;
+        g_lastLegacyControllerModMode = enabled;
+        ShimLog("Legacy controller mod input mode: %s", enabled ? "enabled" : "disabled");
+    }
+    return enabled;
+}
+
+static float ShapeStickAxisForLegacyControllerMods(float value) {
+    value = ClampGamepadAxis(value);
+    if (!LegacyControllerModMode()) return value;
+
+    if (AbsGamepadAxis(value) < 0.08f) {
+        return 0.0f;
+    }
+    return ClampGamepadAxis(value * 1.12f);
+}
+
+static unsigned char GamepadButton(GameInputGamepadButtons buttons, GameInputGamepadButtons mask) {
+    return (buttons & mask) ? GLFW_PRESS : GLFW_RELEASE;
+}
+
+static void ConvertGameInputGamepadState(const GameInputGamepadState& state) {
+    ClearGamepadState();
+
+    g_gamepad_state.buttons[GLFW_GAMEPAD_BUTTON_A] = GamepadButton(state.buttons, GameInputGamepadA);
+    g_gamepad_state.buttons[GLFW_GAMEPAD_BUTTON_B] = GamepadButton(state.buttons, GameInputGamepadB);
+    g_gamepad_state.buttons[GLFW_GAMEPAD_BUTTON_X] = GamepadButton(state.buttons, GameInputGamepadX);
+    g_gamepad_state.buttons[GLFW_GAMEPAD_BUTTON_Y] = GamepadButton(state.buttons, GameInputGamepadY);
+    g_gamepad_state.buttons[GLFW_GAMEPAD_BUTTON_LEFT_BUMPER] = GamepadButton(state.buttons, GameInputGamepadLeftShoulder);
+    g_gamepad_state.buttons[GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER] = GamepadButton(state.buttons, GameInputGamepadRightShoulder);
+    g_gamepad_state.buttons[GLFW_GAMEPAD_BUTTON_BACK] = GamepadButton(state.buttons, GameInputGamepadView);
+    g_gamepad_state.buttons[GLFW_GAMEPAD_BUTTON_START] = GamepadButton(state.buttons, GameInputGamepadMenu);
+    g_gamepad_state.buttons[GLFW_GAMEPAD_BUTTON_GUIDE] = GLFW_RELEASE;
+    g_gamepad_state.buttons[GLFW_GAMEPAD_BUTTON_LEFT_THUMB] = GamepadButton(state.buttons, GameInputGamepadLeftThumbstick);
+    g_gamepad_state.buttons[GLFW_GAMEPAD_BUTTON_RIGHT_THUMB] = GamepadButton(state.buttons, GameInputGamepadRightThumbstick);
+    g_gamepad_state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_UP] = GamepadButton(state.buttons, GameInputGamepadDPadUp);
+    g_gamepad_state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_RIGHT] = GamepadButton(state.buttons, GameInputGamepadDPadRight);
+    g_gamepad_state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_DOWN] = GamepadButton(state.buttons, GameInputGamepadDPadDown);
+    g_gamepad_state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_LEFT] = GamepadButton(state.buttons, GameInputGamepadDPadLeft);
+
+    g_gamepad_state.axes[GLFW_GAMEPAD_AXIS_LEFT_X] = ShapeStickAxisForLegacyControllerMods(state.leftThumbstickX);
+    g_gamepad_state.axes[GLFW_GAMEPAD_AXIS_LEFT_Y] = ShapeStickAxisForLegacyControllerMods(-state.leftThumbstickY);
+    g_gamepad_state.axes[GLFW_GAMEPAD_AXIS_RIGHT_X] = ShapeStickAxisForLegacyControllerMods(state.rightThumbstickX);
+    g_gamepad_state.axes[GLFW_GAMEPAD_AXIS_RIGHT_Y] = ShapeStickAxisForLegacyControllerMods(-state.rightThumbstickY);
+    g_gamepad_state.axes[GLFW_GAMEPAD_AXIS_LEFT_TRIGGER] = ClampGamepadAxis(state.leftTrigger * 2.0f - 1.0f);
+    g_gamepad_state.axes[GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER] = ClampGamepadAxis(state.rightTrigger * 2.0f - 1.0f);
+
+    memcpy(g_joystick_axes, g_gamepad_state.axes, sizeof(g_joystick_axes));
+    memcpy(g_joystick_buttons, g_gamepad_state.buttons, sizeof(g_joystick_buttons));
+}
+
+static bool PollGameInputGamepad(bool fireCallbacks) {
+    if (!EnsureGameInput()) return false;
+
+    if (!CoreWindowAcceptsInput()) {
+        ClearGamepadState();
+        return g_gamepad_present;
+    }
+
+    const ULONGLONG nowMs = GetTickCount64();
+    if (g_haveGameInputPollCache && nowMs - g_lastGameInputPollMs <= 4) {
+        return g_gamepad_present;
+    }
+    g_haveGameInputPollCache = true;
+    g_lastGameInputPollMs = nowMs;
+
+    ComPtr<IGameInputReading> reading;
+    HRESULT hr = g_gameInput->GetCurrentReading(GameInputKindGamepad, nullptr, reading.GetAddressOf());
+
+    GameInputGamepadState state = {};
+    const bool present = SUCCEEDED(hr) && reading && reading->GetGamepadState(&state);
+    const bool previousPresent = g_gamepad_present;
+    g_gamepad_present = present;
+
+    if (!present) {
+        ClearGamepadState();
+        g_haveGameInputGamepadState = false;
+
+        if (previousPresent && fireCallbacks && g_joystick_cb) {
+            g_joystick_cb(GLFW_JOYSTICK_1, GLFW_DISCONNECTED);
+        }
+        if (g_controller_log_count < 6) {
+            ++g_controller_log_count;
+            ShimLog("GameInput gamepad unavailable hr=0x%08X", hr);
+        }
+        return false;
+    }
+
+    ConvertGameInputGamepadState(state);
+
+    if (!g_haveGameInputGamepadState) {
+        g_haveGameInputGamepadState = true;
+        g_lastGameInputGamepadState = state;
+        ShimLog("GameInput gamepad ready kind=0x%X buttons=0x%X lt=%.2f rt=%.2f lx=%.2f ly=%.2f rx=%.2f ry=%.2f",
+            reading->GetInputKind(), (unsigned)state.buttons,
+            state.leftTrigger, state.rightTrigger,
+            state.leftThumbstickX, state.leftThumbstickY,
+            state.rightThumbstickX, state.rightThumbstickY);
+    } else if (g_controller_log_count < 24 &&
+        (state.buttons != g_lastGameInputGamepadState.buttons ||
+         state.leftTrigger != g_lastGameInputGamepadState.leftTrigger ||
+         state.rightTrigger != g_lastGameInputGamepadState.rightTrigger ||
+         state.leftThumbstickX != g_lastGameInputGamepadState.leftThumbstickX ||
+         state.leftThumbstickY != g_lastGameInputGamepadState.leftThumbstickY ||
+         state.rightThumbstickX != g_lastGameInputGamepadState.rightThumbstickX ||
+         state.rightThumbstickY != g_lastGameInputGamepadState.rightThumbstickY)) {
+        ++g_controller_log_count;
+        ShimLog("GameInput gamepad state buttons=0x%X lt=%.2f rt=%.2f lx=%.2f ly=%.2f rx=%.2f ry=%.2f",
+            (unsigned)state.buttons, state.leftTrigger, state.rightTrigger,
+            state.leftThumbstickX, state.leftThumbstickY,
+            state.rightThumbstickX, state.rightThumbstickY);
+        g_lastGameInputGamepadState = state;
+    }
+
+    if (!previousPresent && fireCallbacks && g_joystick_cb) {
+        ShimLog("GameInput gamepad callback GLFW_CONNECTED");
+        g_joystick_cb(GLFW_JOYSTICK_1, GLFW_CONNECTED);
+    }
+    return true;
+}
+
+static bool InstallKeyboardHooks() {
+    if (g_keyboardHooksInstalled) return true;
+    if (!g_coreWindow) return false;
+
+    g_keyDownHandler = Callback<CoreWindowKeyHandler>(
+        [](ICoreWindow*, IKeyEventArgs* args) -> HRESULT {
+            if (!args) return S_OK;
+            VirtualKey virtualKey = VirtualKey_None;
+            CorePhysicalKeyStatus status = {};
+            args->get_VirtualKey(&virtualKey);
+            args->get_KeyStatus(&status);
+            DispatchKeyEvent(virtualKey, status, GLFW_PRESS);
+            return S_OK;
+        });
+    g_keyUpHandler = Callback<CoreWindowKeyHandler>(
+        [](ICoreWindow*, IKeyEventArgs* args) -> HRESULT {
+            if (!args) return S_OK;
+            VirtualKey virtualKey = VirtualKey_None;
+            CorePhysicalKeyStatus status = {};
+            args->get_VirtualKey(&virtualKey);
+            args->get_KeyStatus(&status);
+            DispatchKeyEvent(virtualKey, status, GLFW_RELEASE);
+            return S_OK;
+        });
+    g_charReceivedHandler = Callback<CoreWindowCharHandler>(
+        [](ICoreWindow*, ICharacterReceivedEventArgs* args) -> HRESULT {
+            if (!args) return S_OK;
+            UINT32 codepoint = 0;
+            args->get_KeyCode(&codepoint);
+            DispatchCharEvent(codepoint);
+            return S_OK;
+        });
+
+    HRESULT hr = g_coreWindow->add_KeyDown(g_keyDownHandler.Get(), &g_keyDownToken);
+    if (FAILED(hr)) {
+        ShimLog("add_KeyDown failed hr=0x%08X", hr);
+        return false;
+    }
+    hr = g_coreWindow->add_KeyUp(g_keyUpHandler.Get(), &g_keyUpToken);
+    if (FAILED(hr)) {
+        ShimLog("add_KeyUp failed hr=0x%08X", hr);
+        g_coreWindow->remove_KeyDown(g_keyDownToken);
+        ZeroMemory(&g_keyDownToken, sizeof(g_keyDownToken));
+        return false;
+    }
+    hr = g_coreWindow->add_CharacterReceived(g_charReceivedHandler.Get(), &g_charReceivedToken);
+    if (FAILED(hr)) {
+        ShimLog("add_CharacterReceived failed hr=0x%08X", hr);
+        g_coreWindow->remove_KeyDown(g_keyDownToken);
+        g_coreWindow->remove_KeyUp(g_keyUpToken);
+        ZeroMemory(&g_keyDownToken, sizeof(g_keyDownToken));
+        ZeroMemory(&g_keyUpToken, sizeof(g_keyUpToken));
+        return false;
+    }
+
+    g_keyboardHooksInstalled = true;
+    ShimLog("CoreWindow keyboard hooks installed");
+    return true;
+}
+
+static void InstallCoreWindowLifecycleHooks() {
+    if (g_lifecycleHooksInstalled || !g_coreWindow) return;
+
+    g_visibilityHandler = Callback<CoreWindowVisibilityHandler>(
+        [](ICoreWindow*, IVisibilityChangedEventArgs* args) -> HRESULT {
+            boolean visible = true;
+            if (args) {
+                args->get_Visible(&visible);
+            }
+            const LONG next = visible ? 1 : 0;
+            const LONG old = InterlockedExchange(&g_coreWindowVisibleForInput, next);
+            if (old != next) {
+                MarkCoreWindowInputStateChanged();
+                ClearKeyboardState();
+                ClearGamepadState();
+                ShimLog("CoreWindow VisibilityChanged visible=%d", next);
+            }
+            return S_OK;
+        });
+
+    HRESULT hr = g_coreWindow->add_VisibilityChanged(g_visibilityHandler.Get(), &g_visibilityToken);
+    if (FAILED(hr)) {
+        ShimLog("add_VisibilityChanged failed hr=0x%08X", hr);
+    }
+
+    g_activatedHandler = Callback<CoreWindowActivatedHandler>(
+        [](ICoreWindow*, IWindowActivatedEventArgs* args) -> HRESULT {
+            CoreWindowActivationState state = CoreWindowActivationState_CodeActivated;
+            if (args) {
+                args->get_WindowActivationState(&state);
+            }
+            const LONG next = state == CoreWindowActivationState_Deactivated ? 0 : 1;
+            const LONG old = InterlockedExchange(&g_coreWindowActivatedForInput, next);
+            if (old != next) {
+                MarkCoreWindowInputStateChanged();
+                ClearKeyboardState();
+                ClearGamepadState();
+                ShimLog("CoreWindow Activated state=%d active=%d", (int)state, next);
+            }
+            if (g_focus_cb) {
+                g_focus_cb((GLFWwindow*)&g_fake_window, next ? GLFW_TRUE : GLFW_FALSE);
+            }
+            return S_OK;
+        });
+
+    hr = g_coreWindow->add_Activated(g_activatedHandler.Get(), &g_activatedToken);
+    if (FAILED(hr)) {
+        ShimLog("add_Activated failed hr=0x%08X", hr);
+    }
+
+    g_lifecycleHooksInstalled = true;
+    ShimLog("CoreWindow lifecycle hooks installed");
+}
+
+// ---------------------------------------------------------------------------
+// CoreWindow access
+// ---------------------------------------------------------------------------
+static bool AcquireCoreWindow() {
+    if (g_coreWindow) return true;
+
+    ComPtr<ICoreApplication> coreApp;
+    HRESULT hr = GetActivationFactory(
+        HStringReference(RuntimeClass_Windows_ApplicationModel_Core_CoreApplication).Get(),
+        &coreApp);
+    if (SUCCEEDED(hr)) {
+        ComPtr<IPropertySet> props;
+        hr = coreApp->get_Properties(props.GetAddressOf());
+        if (SUCCEEDED(hr)) {
+            ComPtr<IMap<HSTRING, IInspectable*>> propMap;
+            hr = props.As(&propMap);
+            if (SUCCEEDED(hr)) {
+                boolean hasWindow = false;
+                hr = propMap->HasKey(HStringReference(kEGLNativeWindowTypeProperty).Get(), &hasWindow);
+                if (SUCCEEDED(hr) && hasWindow) {
+                    ComPtr<IInspectable> inspectable;
+                    hr = propMap->Lookup(HStringReference(kEGLNativeWindowTypeProperty).Get(), inspectable.GetAddressOf());
+                    if (SUCCEEDED(hr) && inspectable) {
+                        hr = inspectable.As(&g_coreWindow);
+                        if (SUCCEEDED(hr) && g_coreWindow) {
+                            ShimLog("CoreWindow acquired from CoreApplication properties");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (!g_coreWindow) {
+        ComPtr<ICoreWindowStatic> coreWindowStatic;
+        hr = GetActivationFactory(
+            HStringReference(RuntimeClass_Windows_UI_Core_CoreWindow).Get(),
+            &coreWindowStatic);
+        if (SUCCEEDED(hr)) {
+            coreWindowStatic->GetForCurrentThread(g_coreWindow.GetAddressOf());
+            if (g_coreWindow) {
+                ShimLog("CoreWindow acquired from GetForCurrentThread");
+            }
+        }
+    }
+
+    if (!g_coreWindow) {
+        ShimLog("No CoreWindow available");
+        return false;
+    }
+
+    g_coreWindow->get_Dispatcher(g_dispatcher.GetAddressOf());
+    InstallCoreWindowLifecycleHooks();
+    InstallKeyboardHooks();
+    return true;
+}
+
+static int ScaleDimensionToPixels(FLOAT value, double scale, int fallback) {
+    if (value <= 0.0f) return fallback;
+    if (scale <= 0.0) scale = 1.0;
+    const double scaled = (double)value * scale;
+    return scaled > 0.0 ? (int)(scaled + 0.5) : fallback;
+}
+
+static bool UseRawScaledFramebuffer() {
+    return EnvFlagEnabled(L"MC_USE_RAW_SCALED_FRAMEBUFFER");
+}
+
+static void GetDisplayScale(double& scaleX, double& scaleY) {
+    scaleX = 1.0;
+    scaleY = 1.0;
+
+    wchar_t envScale[32] = {};
+    DWORD envLen = GetEnvironmentVariableW(
+        L"MC_RAW_PIXELS_PER_VIEW_PIXEL",
+        envScale,
+        (DWORD)(sizeof(envScale) / sizeof(envScale[0])));
+    if (envLen > 0 && envLen < (DWORD)(sizeof(envScale) / sizeof(envScale[0]))) {
+        wchar_t* end = nullptr;
+        const double value = wcstod(envScale, &end);
+        if (value >= 0.5 && value <= 8.0) {
+            scaleX = value;
+            scaleY = value;
+            return;
+        }
+    }
+
+    ComPtr<IDisplayInformationStatics> displayStatics;
+    HRESULT hr = GetActivationFactory(
+        HStringReference(RuntimeClass_Windows_Graphics_Display_DisplayInformation).Get(),
+        &displayStatics);
+    if (FAILED(hr)) return;
+
+    ComPtr<IDisplayInformation> displayInfo;
+    hr = displayStatics->GetForCurrentView(displayInfo.GetAddressOf());
+    if (FAILED(hr) || !displayInfo) return;
+
+    ComPtr<IDisplayInformation2> displayInfo2;
+    if (SUCCEEDED(displayInfo.As(&displayInfo2)) && displayInfo2) {
+        DOUBLE rawPixelsPerViewPixel = 1.0;
+        if (SUCCEEDED(displayInfo2->get_RawPixelsPerViewPixel(&rawPixelsPerViewPixel)) &&
+            rawPixelsPerViewPixel > 0.0) {
+            scaleX = rawPixelsPerViewPixel;
+            scaleY = rawPixelsPerViewPixel;
+            return;
+        }
+    }
+
+    FLOAT logicalDpi = 96.0f;
+    if (SUCCEEDED(displayInfo->get_LogicalDpi(&logicalDpi)) && logicalDpi > 0.0f) {
+        scaleX = logicalDpi / 96.0;
+        scaleY = logicalDpi / 96.0;
+    }
+}
+
+static void RefreshWindowMetrics(bool fireCallbacks) {
+    if (!AcquireCoreWindow()) return;
+
+    Rect bounds = {};
+    if (FAILED(g_coreWindow->get_Bounds(&bounds))) return;
+
+    double scaleX = 1.0;
+    double scaleY = 1.0;
+    GetDisplayScale(scaleX, scaleY);
+
+    const int newWindowWidth = bounds.Width > 0 ? (int)(bounds.Width + 0.5f) : g_window_width;
+    const int newWindowHeight = bounds.Height > 0 ? (int)(bounds.Height + 0.5f) : g_window_height;
+    // Mesa's UWP CoreWindow surface is sized in view pixels. Reporting raw
+    // display pixels on 4K displays makes Minecraft set a viewport larger than
+    // the EGL surface, which clips rendering into the lower-left corner.
+    const bool rawScaledFramebuffer = UseRawScaledFramebuffer();
+    const int newFramebufferWidth = rawScaledFramebuffer
+        ? ScaleDimensionToPixels(bounds.Width, scaleX, g_framebuffer_width)
+        : newWindowWidth;
+    const int newFramebufferHeight = rawScaledFramebuffer
+        ? ScaleDimensionToPixels(bounds.Height, scaleY, g_framebuffer_height)
+        : newWindowHeight;
+    const float newContentScaleX = (float)scaleX;
+    const float newContentScaleY = (float)scaleY;
+
+    if (newWindowWidth == g_window_width &&
+        newWindowHeight == g_window_height &&
+        newFramebufferWidth == g_framebuffer_width &&
+        newFramebufferHeight == g_framebuffer_height &&
+        newContentScaleX == g_content_scale_x &&
+        newContentScaleY == g_content_scale_y) {
+        return;
+    }
+
+    g_window_width = newWindowWidth;
+    g_window_height = newWindowHeight;
+    g_framebuffer_width = newFramebufferWidth;
+    g_framebuffer_height = newFramebufferHeight;
+    g_content_scale_x = newContentScaleX;
+    g_content_scale_y = newContentScaleY;
+    g_vidmode.width = g_framebuffer_width;
+    g_vidmode.height = g_framebuffer_height;
+    g_fake_window.width = g_window_width;
+    g_fake_window.height = g_window_height;
+    ShimLog("Window size %dx%d, framebuffer %dx%d, scale %.3fx%.3f%s",
+        g_window_width, g_window_height,
+        g_framebuffer_width, g_framebuffer_height,
+        g_content_scale_x, g_content_scale_y,
+        rawScaledFramebuffer ? " raw-scaled" : "");
+
+    if (fireCallbacks) {
+        if (g_winsize_cb) g_winsize_cb((GLFWwindow*)&g_fake_window, g_window_width, g_window_height);
+        if (g_fbsize_cb) g_fbsize_cb((GLFWwindow*)&g_fake_window, g_framebuffer_width, g_framebuffer_height);
+        if (g_contentscale_cb) g_contentscale_cb((GLFWwindow*)&g_fake_window, g_content_scale_x, g_content_scale_y);
+    }
+}
+
+static bool BuildNativeWindowPropertySet() {
+    if (g_nativeWindowPropertySet) return true;
+    if (!AcquireCoreWindow()) return false;
+
+    ComPtr<IActivationFactory> propSetFactory;
+    HRESULT hr = GetActivationFactory(
+        HStringReference(RuntimeClass_Windows_Foundation_Collections_PropertySet).Get(),
+        &propSetFactory);
+    if (FAILED(hr)) {
+        ShimLog("PropertySet factory failed hr=0x%08X", hr);
+        return false;
+    }
+
+    ComPtr<IInspectable> propertySetInspectable;
+    hr = propSetFactory->ActivateInstance(propertySetInspectable.GetAddressOf());
+    if (FAILED(hr)) {
+        ShimLog("PropertySet ActivateInstance failed hr=0x%08X", hr);
+        return false;
+    }
+
+    ComPtr<IPropertySet> propertySet;
+    hr = propertySetInspectable.As(&propertySet);
+    if (FAILED(hr)) {
+        ShimLog("PropertySet As(IPropertySet) failed hr=0x%08X", hr);
+        return false;
+    }
+
+    ComPtr<IMap<HSTRING, IInspectable*>> propMap;
+    hr = propertySet.As(&propMap);
+    if (FAILED(hr)) {
+        ShimLog("PropertySet As(IMap) failed hr=0x%08X", hr);
+        return false;
+    }
+
+    RefreshWindowMetrics(false);
+
+    boolean replaced = false;
+    hr = propMap->Insert(HStringReference(kEGLNativeWindowTypeProperty).Get(), g_coreWindow.Get(), &replaced);
+    if (FAILED(hr)) {
+        ShimLog("Insert(EGLNativeWindowTypeProperty) failed hr=0x%08X", hr);
+        return false;
+    }
+
+    ComPtr<IPropertyValueStatics> propertyValueStatics;
+    hr = GetActivationFactory(
+        HStringReference(RuntimeClass_Windows_Foundation_PropertyValue).Get(),
+        &propertyValueStatics);
+    if (FAILED(hr)) {
+        ShimLog("PropertyValue factory failed hr=0x%08X", hr);
+        return false;
+    }
+
+    Size size = {};
+    size.Width = (FLOAT)g_framebuffer_width;
+    size.Height = (FLOAT)g_framebuffer_height;
+
+    ComPtr<IInspectable> sizeInspectable;
+    hr = propertyValueStatics->CreateSize(size, sizeInspectable.GetAddressOf());
+    if (FAILED(hr)) {
+        ShimLog("CreateSize failed hr=0x%08X", hr);
+        return false;
+    }
+
+    hr = propMap->Insert(HStringReference(kEGLRenderSurfaceSizeProperty).Get(), sizeInspectable.Get(), &replaced);
+    if (FAILED(hr)) {
+        ShimLog("Insert(EGLRenderSurfaceSizeProperty) failed hr=0x%08X", hr);
+        return false;
+    }
+
+    propertySet.As(&g_nativeWindowPropertySet);
+    ShimLog("Created EGL PropertySet surface descriptor (%dx%d)",
+        g_framebuffer_width, g_framebuffer_height);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Graphics runtime loader
+// ---------------------------------------------------------------------------
+static bool LoadMesaEGL() {
+    if (g_libEGL && g_opengl32) return true;
+
+    wchar_t runtimeDir[MAX_PATH];
+    wchar_t packagePrefix[MAX_PATH];
+    SelectGraphicsRuntimeDir(runtimeDir, MAX_PATH, packagePrefix, MAX_PATH);
+
+    struct RuntimeDll {
+        const wchar_t* file;
+        const char* label;
+        bool required;
+    };
+
+    const RuntimeDll siblings[] = {
+        { L"libglapi.dll", "libglapi.dll", false },
+        { L"z-1.dll", "z-1.dll", false },
+        { L"libgallium_wgl.dll", "libgallium_wgl.dll", false },
+        { L"libGLESv2.dll", "libGLESv2.dll", false },
+        { L"libGLESv1_CM.dll", "libGLESv1_CM.dll", false },
+        { L"glu32.dll", "glu32.dll", false },
+        { L"dxil.dll", "dxil.dll", false },
+    };
+
+    for (const RuntimeDll& dll : siblings) {
+        wchar_t absolutePath[MAX_PATH];
+        wchar_t packagedPath[MAX_PATH];
+        RuntimeDllPath(runtimeDir, packagePrefix, dll.file,
+            absolutePath, MAX_PATH, packagedPath, MAX_PATH);
+        if (GetFileAttributesW(absolutePath) != INVALID_FILE_ATTRIBUTES) {
+            HMODULE loaded = LoadPackagedOrFile(packagedPath, absolutePath, dll.label);
+            if (_wcsicmp(dll.file, L"libGLESv2.dll") == 0) {
+                g_libGLESv2 = loaded;
+            }
+        }
+    }
+
+    wchar_t glPath[MAX_PATH];
+    wchar_t glPackaged[MAX_PATH];
+    wchar_t eglPath[MAX_PATH];
+    wchar_t eglPackaged[MAX_PATH];
+    RuntimeDllPath(runtimeDir, packagePrefix, L"opengl32.dll", glPath, MAX_PATH, glPackaged, MAX_PATH);
+    RuntimeDllPath(runtimeDir, packagePrefix, L"libEGL.dll", eglPath, MAX_PATH, eglPackaged, MAX_PATH);
+
+    ShimLog("libEGL=%S", eglPath);
+    ShimLog("opengl32=%S", glPath);
+
+    g_opengl32 = LoadPackagedOrFile(glPackaged, glPath, "opengl32.dll");
+    g_libEGL = LoadPackagedOrFile(eglPackaged, eglPath, "libEGL.dll");
+    if (!g_opengl32 || !g_libEGL) {
+        ShimLog("Graphics loader failed gl=%p egl=%p err=%u", g_opengl32, g_libEGL, GetLastError());
+        return false;
+    }
+
+    PFN_proc_init procInit = (PFN_proc_init)GetProcAddress(g_opengl32, "proc_init");
+    if (procInit) {
+        ShimLog("Calling opengl32!proc_init");
+        procInit();
+        ShimLog("opengl32!proc_init returned");
+    } else if (g_graphicsRuntimeUsesGles) {
+        ShimLog("opengl32!proc_init not exported");
+    }
+
+    p_eglGetDisplay = (PFN_eglGetDisplay)ResolveProc(g_libEGL, "eglGetDisplay");
+    p_eglGetPlatformDisplay = (PFN_eglGetPlatformDisplay)ResolveProc(g_libEGL, "eglGetPlatformDisplay");
+    p_eglInitialize = (PFN_eglInitialize)ResolveProc(g_libEGL, "eglInitialize");
+    p_eglTerminate = (PFN_eglTerminate)ResolveProc(g_libEGL, "eglTerminate");
+    p_eglBindAPI = (PFN_eglBindAPI)ResolveProc(g_libEGL, "eglBindAPI");
+    p_eglChooseConfig = (PFN_eglChooseConfig)ResolveProc(g_libEGL, "eglChooseConfig");
+    p_eglCreateWindowSurface = (PFN_eglCreateWindowSurface)ResolveProc(g_libEGL, "eglCreateWindowSurface");
+    p_eglCreatePlatformWindowSurface = (PFN_eglCreatePlatformWindowSurface)ResolveProc(g_libEGL, "eglCreatePlatformWindowSurface");
+    p_eglCreateContext = (PFN_eglCreateContext)ResolveProc(g_libEGL, "eglCreateContext");
+    p_eglDestroyContext = (PFN_eglDestroyContext)ResolveProc(g_libEGL, "eglDestroyContext");
+    p_eglDestroySurface = (PFN_eglDestroySurface)ResolveProc(g_libEGL, "eglDestroySurface");
+    p_eglMakeCurrent = (PFN_eglMakeCurrent)ResolveProc(g_libEGL, "eglMakeCurrent");
+    p_eglSwapBuffers = (PFN_eglSwapBuffers)ResolveProc(g_libEGL, "eglSwapBuffers");
+    p_eglSwapInterval = (PFN_eglSwapInterval)ResolveProc(g_libEGL, "eglSwapInterval");
+    p_eglQueryString = (PFN_eglQueryString)ResolveProc(g_libEGL, "eglQueryString");
+    p_eglGetProcAddress = (PFN_eglGetProcAddress)ResolveProc(g_libEGL, "eglGetProcAddress");
+    p_eglGetError = (PFN_eglGetError)ResolveProc(g_libEGL, "eglGetError");
+    p_eglGetConfigAttrib = (PFN_eglGetConfigAttrib)ResolveProc(g_libEGL, "eglGetConfigAttrib");
+
+    if (!p_eglGetDisplay || !p_eglInitialize || !p_eglBindAPI || !p_eglChooseConfig ||
+        !p_eglCreateWindowSurface || !p_eglCreateContext || !p_eglMakeCurrent ||
+        !p_eglSwapBuffers || !p_eglGetProcAddress) {
+        ShimLog("Critical EGL exports missing");
+        return false;
+    }
+
+    return true;
+}
+
+static bool CreateEglContext() {
+    if (g_eglContext != EGL_NO_CONTEXT) return true;
+    if (!LoadMesaEGL() || !AcquireCoreWindow()) return false;
+
+    g_eglDisplay = p_eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    if (g_eglDisplay == EGL_NO_DISPLAY && p_eglGetPlatformDisplay) {
+        g_eglDisplay = p_eglGetPlatformDisplay(0, EGL_DEFAULT_DISPLAY, nullptr);
+    }
+    if (g_eglDisplay == EGL_NO_DISPLAY) {
+        ReportEglError("eglGetDisplay");
+        return false;
+    }
+
+    EGLint major = 0;
+    EGLint minor = 0;
+    if (!p_eglInitialize(g_eglDisplay, &major, &minor)) {
+        ReportEglError("eglInitialize");
+        return false;
+    }
+
+    const EGLenum eglApi = g_graphicsRuntimeUsesGles ? EGL_OPENGL_ES_API : EGL_OPENGL_API;
+    if (!p_eglBindAPI(eglApi)) {
+        ReportEglError(g_graphicsRuntimeUsesGles ? "eglBindAPI(EGL_OPENGL_ES_API)" : "eglBindAPI(EGL_OPENGL_API)");
+        return false;
+    }
+
+    const EGLint renderableType = g_graphicsRuntimeUsesGles ? EGL_OPENGL_ES3_BIT_KHR : EGL_OPENGL_BIT;
+    const EGLint configAttrs[] = {
+        EGL_RED_SIZE, 8,
+        EGL_GREEN_SIZE, 8,
+        EGL_BLUE_SIZE, 8,
+        EGL_ALPHA_SIZE, 8,
+        EGL_DEPTH_SIZE, 24,
+        EGL_STENCIL_SIZE, 8,
+        EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+        EGL_RENDERABLE_TYPE, renderableType,
+        EGL_NONE
+    };
+
+    EGLint numConfigs = 0;
+    if (!p_eglChooseConfig(g_eglDisplay, configAttrs, &g_eglConfig, 1, &numConfigs) || numConfigs < 1) {
+        ReportEglError("eglChooseConfig");
+        return false;
+    }
+
+    // The raw CoreWindow path is the stable Mesa UWP path. The PropertySet path
+    // can report success but present a black surface on Xbox.
+    g_eglSurface = p_eglCreateWindowSurface(g_eglDisplay, g_eglConfig,
+        reinterpret_cast<EGLNativeWindowType>(g_coreWindow.Get()), nullptr);
+    if (g_eglSurface != EGL_NO_SURFACE) {
+        ShimLog("eglCreateWindowSurface(CoreWindow) succeeded");
+    } else {
+        ReportEglError("eglCreateWindowSurface(CoreWindow)");
+    }
+
+    if (g_eglSurface == EGL_NO_SURFACE && p_eglCreatePlatformWindowSurface) {
+        g_eglSurface = p_eglCreatePlatformWindowSurface(g_eglDisplay, g_eglConfig,
+            g_coreWindow.Get(), nullptr);
+        if (g_eglSurface != EGL_NO_SURFACE) {
+            ShimLog("eglCreatePlatformWindowSurface(CoreWindow) succeeded");
+        } else {
+            ReportEglError("eglCreatePlatformWindowSurface(CoreWindow)");
+        }
+    }
+
+    if (g_eglSurface == EGL_NO_SURFACE) {
+        if (!BuildNativeWindowPropertySet()) return false;
+
+        g_eglSurface = p_eglCreateWindowSurface(g_eglDisplay, g_eglConfig,
+            reinterpret_cast<EGLNativeWindowType>(g_nativeWindowPropertySet.Get()), nullptr);
+        if (g_eglSurface != EGL_NO_SURFACE) {
+            ShimLog("eglCreateWindowSurface(PropertySet) succeeded");
+        } else {
+            ReportEglError("eglCreateWindowSurface(PropertySet)");
+        }
+    }
+
+    if (g_eglSurface == EGL_NO_SURFACE && g_nativeWindowPropertySet && p_eglCreatePlatformWindowSurface) {
+        g_eglSurface = p_eglCreatePlatformWindowSurface(g_eglDisplay, g_eglConfig,
+            g_nativeWindowPropertySet.Get(), nullptr);
+        if (g_eglSurface != EGL_NO_SURFACE) {
+            ShimLog("eglCreatePlatformWindowSurface(PropertySet) succeeded");
+        } else {
+            ReportEglError("eglCreatePlatformWindowSurface(PropertySet)");
+        }
+    }
+
+    if (g_eglSurface == EGL_NO_SURFACE) {
+        return false;
+    }
+
+    const bool legacyOpenGlContext = EnvFlagEnabled(L"MC_LEGACY_OPENGL_CONTEXT");
+    const EGLint desktopContextAttrs[] = {
+        EGL_CONTEXT_MAJOR_VERSION_KHR, 3,
+        EGL_CONTEXT_MINOR_VERSION_KHR, 2,
+        EGL_CONTEXT_OPENGL_PROFILE_MASK_KHR, EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT_KHR,
+        EGL_NONE
+    };
+    const EGLint legacyDesktopContextAttrs[] = {
+        EGL_CONTEXT_MAJOR_VERSION_KHR, 3,
+        EGL_CONTEXT_MINOR_VERSION_KHR, 2,
+        EGL_CONTEXT_OPENGL_PROFILE_MASK_KHR, EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT_KHR,
+        EGL_NONE
+    };
+    const EGLint glesContextAttrs[] = {
+        EGL_CONTEXT_CLIENT_VERSION, 3,
+        EGL_NONE
+    };
+    const EGLint* contextAttrs = g_graphicsRuntimeUsesGles ? glesContextAttrs : (legacyOpenGlContext ? legacyDesktopContextAttrs : desktopContextAttrs);
+    ShimLog("OpenGL context request: %s", g_graphicsRuntimeUsesGles ? "GLES3" : (legacyOpenGlContext ? "3.2 compatibility" : "3.2 core"));
+    g_eglContext = p_eglCreateContext(g_eglDisplay, g_eglConfig, EGL_NO_CONTEXT, contextAttrs);
+    if (g_eglContext == EGL_NO_CONTEXT) {
+        ReportEglError(g_graphicsRuntimeUsesGles ? "eglCreateContext(GLES3)" : (legacyOpenGlContext ? "eglCreateContext(3.2 compatibility)" : "eglCreateContext(3.2 core)"));
+        g_eglContext = p_eglCreateContext(g_eglDisplay, g_eglConfig, EGL_NO_CONTEXT, nullptr);
+    }
+    if (g_eglContext == EGL_NO_CONTEXT) {
+        ReportEglError("eglCreateContext(fallback)");
+        return false;
+    }
+
+    const char* vendor = p_eglQueryString ? p_eglQueryString(g_eglDisplay, EGL_VENDOR) : nullptr;
+    const char* version = p_eglQueryString ? p_eglQueryString(g_eglDisplay, EGL_VERSION) : nullptr;
+    ShimLog("EGL initialized %d.%d vendor=%s version=%s context=%p unbound creatorTid=%lu",
+        major, minor, vendor ? vendor : "?", version ? version : "?",
+        g_eglContext, GetCurrentThreadId());
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// DLL entry
+// ---------------------------------------------------------------------------
+BOOL WINAPI DllMain(HINSTANCE h, DWORD reason, LPVOID) {
+    if (reason == DLL_PROCESS_ATTACH) {
+        wchar_t dir[MAX_PATH];
+        DWORD logLen = GetEnvironmentVariableW(L"MC_LOG_DIR", dir, MAX_PATH);
+        if (logLen == 0 || logLen >= MAX_PATH) {
+            GetRuntimeDir(dir, MAX_PATH);
+        }
+        swprintf_s(g_log_path, L"%s\\glfw_uwp.log", dir);
+        FILE* f = NULL;
+        _wfopen_s(&f, g_log_path, L"w");
+        if (f) fclose(f);
+        ShimLog("DllMain attached");
+        DisableThreadLibraryCalls(h);
+    }
+    return TRUE;
+}
+
+// ===========================================================================
+// GLFW API
+// ===========================================================================
+extern "C" __declspec(dllexport) int glfwInit(void) {
+    ShimLog("glfwInit");
+    if (g_initialised) return GLFW_TRUE;
+    if (!AcquireCoreWindow()) return GLFW_FALSE;
+    RefreshWindowMetrics(false);
+    g_fake_window = {0x58574C47u, g_window_width, g_window_height, FALSE, NULL};
+    g_initialised = TRUE;
+    ShimLog("glfwInit OK window %dx%d framebuffer %dx%d",
+        g_window_width, g_window_height,
+        g_framebuffer_width, g_framebuffer_height);
+    return GLFW_TRUE;
+}
+
+extern "C" __declspec(dllexport) void glfwTerminate(void) {
+    ShimLog("glfwTerminate");
+    if (g_coreWindow && g_keyboardHooksInstalled) {
+        g_coreWindow->remove_KeyDown(g_keyDownToken);
+        g_coreWindow->remove_KeyUp(g_keyUpToken);
+        g_coreWindow->remove_CharacterReceived(g_charReceivedToken);
+    }
+    ZeroMemory(&g_keyDownToken, sizeof(g_keyDownToken));
+    ZeroMemory(&g_keyUpToken, sizeof(g_keyUpToken));
+    ZeroMemory(&g_charReceivedToken, sizeof(g_charReceivedToken));
+    g_keyDownHandler.Reset();
+    g_keyUpHandler.Reset();
+    g_charReceivedHandler.Reset();
+    g_keyboardHooksInstalled = false;
+    ZeroMemory(g_key_state, sizeof(g_key_state));
+    g_haveGameInputPollCache = false;
+    g_lastGameInputPollMs = 0;
+    if (p_eglMakeCurrent && g_eglDisplay != EGL_NO_DISPLAY) {
+        p_eglMakeCurrent(g_eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+    }
+    g_eglContextThreadId = 0;
+    if (p_eglDestroyContext && g_eglDisplay != EGL_NO_DISPLAY && g_eglContext != EGL_NO_CONTEXT) {
+        p_eglDestroyContext(g_eglDisplay, g_eglContext);
+    }
+    if (p_eglDestroySurface && g_eglDisplay != EGL_NO_DISPLAY && g_eglSurface != EGL_NO_SURFACE) {
+        p_eglDestroySurface(g_eglDisplay, g_eglSurface);
+    }
+    if (p_eglTerminate && g_eglDisplay != EGL_NO_DISPLAY) {
+        p_eglTerminate(g_eglDisplay);
+    }
+    g_eglContext = EGL_NO_CONTEXT;
+    g_eglSurface = EGL_NO_SURFACE;
+    g_eglDisplay = EGL_NO_DISPLAY;
+    g_eglConfig = nullptr;
+    g_nativeWindowPropertySet.Reset();
+    g_initialised = FALSE;
+    ShimLog("glfwTerminate complete");
+}
+
+extern "C" __declspec(dllexport) void glfwInitHint(int,int) {}
+extern "C" __declspec(dllexport) int  glfwGetPlatform(void) { return GLFW_PLATFORM_WIN32; }
+extern "C" __declspec(dllexport) int  glfwPlatformSupported(int platform) {
+    return platform == GLFW_ANY_PLATFORM || platform == GLFW_PLATFORM_WIN32;
+}
+extern "C" __declspec(dllexport) void glfwGetVersion(int*a,int*b,int*c) { if(a)*a=3; if(b)*b=3; if(c)*c=3; }
+extern "C" __declspec(dllexport) const char* glfwGetVersionString(void) { return "3.3.3 UWP-EGL"; }
+extern "C" __declspec(dllexport) int  glfwGetError(const char**d) { if(d)*d=NULL; return GLFW_NO_ERROR; }
+extern "C" __declspec(dllexport) GLFWerrorfun glfwSetErrorCallback(GLFWerrorfun cb) {
+    GLFWerrorfun p = g_error_cb;
+    g_error_cb = cb;
+    return p;
+}
+extern "C" __declspec(dllexport) void glfwDefaultWindowHints(void) {}
+extern "C" __declspec(dllexport) void glfwWindowHint(int,int) {}
+extern "C" __declspec(dllexport) void glfwWindowHintString(int,const char*) {}
+
+extern "C" __declspec(dllexport)
+GLFWwindow* glfwCreateWindow(int w, int h, const char* title, GLFWmonitor*, GLFWwindow*) {
+    ShimLog("glfwCreateWindow %dx%d '%s'", w, h, title ? title : "");
+    if (!g_initialised && !glfwInit()) return NULL;
+
+    if (w > 0) {
+        g_window_width = w;
+        g_framebuffer_width = UseRawScaledFramebuffer()
+            ? ScaleDimensionToPixels((FLOAT)w, g_content_scale_x, g_framebuffer_width)
+            : w;
+    }
+    if (h > 0) {
+        g_window_height = h;
+        g_framebuffer_height = UseRawScaledFramebuffer()
+            ? ScaleDimensionToPixels((FLOAT)h, g_content_scale_y, g_framebuffer_height)
+            : h;
+    }
+    RefreshWindowMetrics(false);
+    if (!CreateEglContext()) {
+        ShimLog("CreateEglContext FAILED");
+        return NULL;
+    }
+
+    g_fake_window.width = g_window_width;
+    g_fake_window.height = g_window_height;
+    g_vidmode.width = g_framebuffer_width;
+    g_vidmode.height = g_framebuffer_height;
+    if (g_fbsize_cb) g_fbsize_cb((GLFWwindow*)&g_fake_window, g_framebuffer_width, g_framebuffer_height);
+    ShimLog("glfwCreateWindow OK");
+    return (GLFWwindow*)&g_fake_window;
+}
+
+extern "C" __declspec(dllexport) void glfwDestroyWindow(GLFWwindow*) {
+    ShimLog("glfwDestroyWindow");
+    g_should_close = TRUE;
+}
+extern "C" __declspec(dllexport) int  glfwWindowShouldClose(GLFWwindow*) { return g_should_close ? GLFW_TRUE : GLFW_FALSE; }
+extern "C" __declspec(dllexport) void glfwSetWindowShouldClose(GLFWwindow*, int v) { g_should_close = (v != 0); }
+extern "C" __declspec(dllexport) void glfwSetWindowTitle(GLFWwindow*, const char*) {}
+extern "C" __declspec(dllexport) void glfwSetWindowIcon(GLFWwindow*, int, const GLFWimage*) {}
+extern "C" __declspec(dllexport) void glfwGetWindowPos(GLFWwindow*, int*x, int*y) { if(x)*x=0; if(y)*y=0; }
+extern "C" __declspec(dllexport) void glfwSetWindowPos(GLFWwindow*, int, int) {}
+extern "C" __declspec(dllexport) void glfwGetWindowSize(GLFWwindow*, int*w, int*h) { RefreshWindowMetrics(false); if(w)*w=g_window_width; if(h)*h=g_window_height; }
+extern "C" __declspec(dllexport) void glfwSetWindowSizeLimits(GLFWwindow*, int, int, int, int) {}
+extern "C" __declspec(dllexport) void glfwSetWindowAspectRatio(GLFWwindow*, int, int) {}
+extern "C" __declspec(dllexport) void glfwSetWindowSize(GLFWwindow*, int, int) {}
+extern "C" __declspec(dllexport) void glfwGetFramebufferSize(GLFWwindow*, int*w, int*h) { RefreshWindowMetrics(false); if(w)*w=g_framebuffer_width; if(h)*h=g_framebuffer_height; }
+extern "C" __declspec(dllexport) void glfwGetWindowFrameSize(GLFWwindow*, int*l, int*t, int*r, int*b) {
+    if(l)*l=0; if(t)*t=0; if(r)*r=0; if(b)*b=0;
+}
+extern "C" __declspec(dllexport) void glfwGetWindowContentScale(GLFWwindow*, float*x, float*y) {
+    RefreshWindowMetrics(false);
+    if(x)*x=g_content_scale_x; if(y)*y=g_content_scale_y;
+}
+extern "C" __declspec(dllexport) float glfwGetWindowOpacity(GLFWwindow*) { return 1.f; }
+extern "C" __declspec(dllexport) void  glfwSetWindowOpacity(GLFWwindow*, float) {}
+extern "C" __declspec(dllexport) void glfwIconifyWindow(GLFWwindow*) {}
+extern "C" __declspec(dllexport) void glfwRestoreWindow(GLFWwindow*) {}
+extern "C" __declspec(dllexport) void glfwMaximizeWindow(GLFWwindow*) {}
+extern "C" __declspec(dllexport) void glfwShowWindow(GLFWwindow*) {
+    ShimLog("glfwShowWindow");
+}
+extern "C" __declspec(dllexport) void glfwHideWindow(GLFWwindow*) {}
+extern "C" __declspec(dllexport) void glfwFocusWindow(GLFWwindow*) {}
+extern "C" __declspec(dllexport) void glfwRequestWindowAttention(GLFWwindow*) {}
+extern "C" __declspec(dllexport) GLFWmonitor* glfwGetWindowMonitor(GLFWwindow*) { return NULL; }
+extern "C" __declspec(dllexport) void glfwSetWindowMonitor(GLFWwindow*, GLFWmonitor*, int, int, int, int, int) {}
+extern "C" __declspec(dllexport) int glfwGetWindowAttrib(GLFWwindow*, int a) {
+    if (g_window_attrib_log_count < 32) {
+        ++g_window_attrib_log_count;
+        ShimLog("glfwGetWindowAttrib #%d attr=0x%08X", g_window_attrib_log_count, a);
+    }
+    switch (a) {
+    case GLFW_VISIBLE:
+    case GLFW_HOVERED:
+        return GLFW_TRUE;
+    case GLFW_FOCUSED:
+        return CoreWindowAcceptsInput() ? GLFW_TRUE : GLFW_FALSE;
+    case GLFW_MAXIMIZED:
+        return GLFW_FALSE;
+    case GLFW_CLIENT_API:
+        return GLFW_OPENGL_API;
+    case GLFW_CONTEXT_VERSION_MAJOR:
+        return 3;
+    case GLFW_CONTEXT_VERSION_MINOR:
+        return 2;
+    case GLFW_OPENGL_PROFILE:
+        return EnvFlagEnabled(L"MC_LEGACY_OPENGL_CONTEXT") ? GLFW_OPENGL_COMPAT_PROFILE : GLFW_OPENGL_CORE_PROFILE;
+    case GLFW_CONTEXT_CREATION_API:
+        return GLFW_EGL_CONTEXT_API;
+    default:
+        return 0;
+    }
+}
+extern "C" __declspec(dllexport) void  glfwSetWindowAttrib(GLFWwindow*, int, int) {}
+extern "C" __declspec(dllexport) void glfwSetWindowUserPointer(GLFWwindow* window, void* userPointer) {
+    FakeWindow* fake = reinterpret_cast<FakeWindow*>(window);
+    if (fake && fake->magic == 0x58574C47u) {
+        fake->user_pointer = userPointer;
+    }
+}
+extern "C" __declspec(dllexport) void* glfwGetWindowUserPointer(GLFWwindow* window) {
+    FakeWindow* fake = reinterpret_cast<FakeWindow*>(window);
+    if (fake && fake->magic == 0x58574C47u) {
+        return fake->user_pointer;
+    }
+    return NULL;
+}
+
+template <typename T>
+static T SwapCallback(T& slot, T cb) {
+    T previous = slot;
+    slot = cb;
+    return previous;
+}
+
+extern "C" __declspec(dllexport) GLFWwindowposfun glfwSetWindowPosCallback(GLFWwindow*, GLFWwindowposfun cb) {
+    return SwapCallback(g_winpos_cb, cb);
+}
+extern "C" __declspec(dllexport) GLFWwindowsizefun glfwSetWindowSizeCallback(GLFWwindow*, GLFWwindowsizefun cb) {
+    return SwapCallback(g_winsize_cb, cb);
+}
+extern "C" __declspec(dllexport) GLFWwindowclosefun glfwSetWindowCloseCallback(GLFWwindow*, GLFWwindowclosefun cb) {
+    return SwapCallback(g_winclose_cb, cb);
+}
+extern "C" __declspec(dllexport) GLFWwindowrefreshfun glfwSetWindowRefreshCallback(GLFWwindow*, GLFWwindowrefreshfun cb) {
+    return SwapCallback(g_winrefresh_cb, cb);
+}
+extern "C" __declspec(dllexport) GLFWwindowfocusfun glfwSetWindowFocusCallback(GLFWwindow*, GLFWwindowfocusfun cb) {
+    return SwapCallback(g_focus_cb, cb);
+}
+extern "C" __declspec(dllexport) GLFWwindowiconifyfun glfwSetWindowIconifyCallback(GLFWwindow*, GLFWwindowiconifyfun cb) {
+    return SwapCallback(g_iconify_cb, cb);
+}
+extern "C" __declspec(dllexport) GLFWwindowmaximizefun glfwSetWindowMaximizeCallback(GLFWwindow*, GLFWwindowmaximizefun cb) {
+    return SwapCallback(g_maximize_cb, cb);
+}
+extern "C" __declspec(dllexport) GLFWframebuffersizefun glfwSetFramebufferSizeCallback(GLFWwindow*, GLFWframebuffersizefun cb) {
+    return SwapCallback(g_fbsize_cb, cb);
+}
+extern "C" __declspec(dllexport) GLFWwindowcontentscalefun glfwSetWindowContentScaleCallback(GLFWwindow*, GLFWwindowcontentscalefun cb) {
+    return SwapCallback(g_contentscale_cb, cb);
+}
+extern "C" __declspec(dllexport) GLFWkeyfun glfwSetKeyCallback(GLFWwindow*, GLFWkeyfun cb) {
+    return SwapCallback(g_key_cb, cb);
+}
+extern "C" __declspec(dllexport) GLFWcharfun glfwSetCharCallback(GLFWwindow*, GLFWcharfun cb) {
+    return SwapCallback(g_char_cb, cb);
+}
+extern "C" __declspec(dllexport) GLFWcharmodsfun glfwSetCharModsCallback(GLFWwindow*, GLFWcharmodsfun cb) {
+    return SwapCallback(g_charmods_cb, cb);
+}
+extern "C" __declspec(dllexport) GLFWmousebuttonfun glfwSetMouseButtonCallback(GLFWwindow*, GLFWmousebuttonfun cb) {
+    return SwapCallback(g_mousebutton_cb, cb);
+}
+extern "C" __declspec(dllexport) GLFWcursorposfun glfwSetCursorPosCallback(GLFWwindow*, GLFWcursorposfun cb) {
+    return SwapCallback(g_cursorpos_cb, cb);
+}
+extern "C" __declspec(dllexport) GLFWcursorenterfun glfwSetCursorEnterCallback(GLFWwindow*, GLFWcursorenterfun cb) {
+    return SwapCallback(g_cursorenter_cb, cb);
+}
+extern "C" __declspec(dllexport) GLFWscrollfun glfwSetScrollCallback(GLFWwindow*, GLFWscrollfun cb) {
+    return SwapCallback(g_scroll_cb, cb);
+}
+extern "C" __declspec(dllexport) GLFWdropfun glfwSetDropCallback(GLFWwindow*, GLFWdropfun cb) {
+    return SwapCallback(g_drop_cb, cb);
+}
+
+extern "C" __declspec(dllexport) void glfwPollEvents(void) {
+    if (g_poll_log_count < 8) {
+        ++g_poll_log_count;
+        ShimLog("glfwPollEvents #%d", g_poll_log_count);
+    }
+    if (g_dispatcher) {
+        g_dispatcher->ProcessEvents(CoreProcessEventsOption_ProcessAllIfPresent);
+    }
+    PollGameInputGamepad(true);
+    RefreshWindowMetrics(true);
+}
+extern "C" __declspec(dllexport) void glfwWaitEvents(void) {
+    if (g_wait_log_count < 8) {
+        ++g_wait_log_count;
+        ShimLog("glfwWaitEvents #%d", g_wait_log_count);
+    }
+    // UWP does not expose GLFW's native wait semantics cleanly here.
+    // Blocking on the dispatcher can stall Minecraft on a black screen,
+    // so emulate a brief wait and then poll.
+    Sleep(1);
+    glfwPollEvents();
+}
+extern "C" __declspec(dllexport) void glfwWaitEventsTimeout(double) {
+    if (g_wait_log_count < 8) {
+        ++g_wait_log_count;
+        ShimLog("glfwWaitEventsTimeout #%d", g_wait_log_count);
+    }
+    Sleep(1);
+    glfwPollEvents();
+}
+extern "C" __declspec(dllexport) void glfwPostEmptyEvent(void) {}
+extern "C" __declspec(dllexport) int  glfwGetInputMode(GLFWwindow*, int m) { return m == GLFW_CURSOR ? GLFW_CURSOR_NORMAL : 0; }
+extern "C" __declspec(dllexport) void glfwSetInputMode(GLFWwindow*, int, int) {}
+extern "C" __declspec(dllexport) int  glfwRawMouseMotionSupported(void) { return GLFW_FALSE; }
+static const char* KeyNameFromGlfwKey(int key) {
+    switch (key) {
+    case GLFW_KEY_SPACE: return "Space";
+    case GLFW_KEY_0: return "0";
+    case GLFW_KEY_1: return "1";
+    case GLFW_KEY_2: return "2";
+    case GLFW_KEY_3: return "3";
+    case GLFW_KEY_4: return "4";
+    case GLFW_KEY_5: return "5";
+    case GLFW_KEY_6: return "6";
+    case GLFW_KEY_7: return "7";
+    case GLFW_KEY_8: return "8";
+    case GLFW_KEY_9: return "9";
+    case GLFW_KEY_A: return "A";
+    case GLFW_KEY_B: return "B";
+    case GLFW_KEY_C: return "C";
+    case GLFW_KEY_D: return "D";
+    case GLFW_KEY_E: return "E";
+    case GLFW_KEY_F: return "F";
+    case GLFW_KEY_G: return "G";
+    case GLFW_KEY_H: return "H";
+    case GLFW_KEY_I: return "I";
+    case GLFW_KEY_J: return "J";
+    case GLFW_KEY_K: return "K";
+    case GLFW_KEY_L: return "L";
+    case GLFW_KEY_M: return "M";
+    case GLFW_KEY_N: return "N";
+    case GLFW_KEY_O: return "O";
+    case GLFW_KEY_P: return "P";
+    case GLFW_KEY_Q: return "Q";
+    case GLFW_KEY_R: return "R";
+    case GLFW_KEY_S: return "S";
+    case GLFW_KEY_T: return "T";
+    case GLFW_KEY_U: return "U";
+    case GLFW_KEY_V: return "V";
+    case GLFW_KEY_W: return "W";
+    case GLFW_KEY_X: return "X";
+    case GLFW_KEY_Y: return "Y";
+    case GLFW_KEY_Z: return "Z";
+    case GLFW_KEY_ESCAPE: return "Escape";
+    case GLFW_KEY_ENTER: return "Enter";
+    case GLFW_KEY_TAB: return "Tab";
+    case GLFW_KEY_BACKSPACE: return "Backspace";
+    case GLFW_KEY_INSERT: return "Insert";
+    case GLFW_KEY_DELETE: return "Delete";
+    case GLFW_KEY_RIGHT: return "Right";
+    case GLFW_KEY_LEFT: return "Left";
+    case GLFW_KEY_DOWN: return "Down";
+    case GLFW_KEY_UP: return "Up";
+    case GLFW_KEY_PAGE_UP: return "Page Up";
+    case GLFW_KEY_PAGE_DOWN: return "Page Down";
+    case GLFW_KEY_HOME: return "Home";
+    case GLFW_KEY_END: return "End";
+    case GLFW_KEY_CAPS_LOCK: return "Caps Lock";
+    case GLFW_KEY_SCROLL_LOCK: return "Scroll Lock";
+    case GLFW_KEY_NUM_LOCK: return "Num Lock";
+    case GLFW_KEY_PRINT_SCREEN: return "Print Screen";
+    case GLFW_KEY_PAUSE: return "Pause";
+    case GLFW_KEY_F1: return "F1";
+    case GLFW_KEY_F2: return "F2";
+    case GLFW_KEY_F3: return "F3";
+    case GLFW_KEY_F4: return "F4";
+    case GLFW_KEY_F5: return "F5";
+    case GLFW_KEY_F6: return "F6";
+    case GLFW_KEY_F7: return "F7";
+    case GLFW_KEY_F8: return "F8";
+    case GLFW_KEY_F9: return "F9";
+    case GLFW_KEY_F10: return "F10";
+    case GLFW_KEY_F11: return "F11";
+    case GLFW_KEY_F12: return "F12";
+    case GLFW_KEY_KP_0: return "Num 0";
+    case GLFW_KEY_KP_1: return "Num 1";
+    case GLFW_KEY_KP_2: return "Num 2";
+    case GLFW_KEY_KP_3: return "Num 3";
+    case GLFW_KEY_KP_4: return "Num 4";
+    case GLFW_KEY_KP_5: return "Num 5";
+    case GLFW_KEY_KP_6: return "Num 6";
+    case GLFW_KEY_KP_7: return "Num 7";
+    case GLFW_KEY_KP_8: return "Num 8";
+    case GLFW_KEY_KP_9: return "Num 9";
+    case GLFW_KEY_KP_DECIMAL: return "Num .";
+    case GLFW_KEY_KP_DIVIDE: return "Num /";
+    case GLFW_KEY_KP_MULTIPLY: return "Num *";
+    case GLFW_KEY_KP_SUBTRACT: return "Num -";
+    case GLFW_KEY_KP_ADD: return "Num +";
+    case GLFW_KEY_LEFT_SHIFT: return "Left Shift";
+    case GLFW_KEY_LEFT_CONTROL: return "Left Control";
+    case GLFW_KEY_LEFT_ALT: return "Left Alt";
+    case GLFW_KEY_LEFT_SUPER: return "Left Win";
+    case GLFW_KEY_RIGHT_SHIFT: return "Right Shift";
+    case GLFW_KEY_RIGHT_CONTROL: return "Right Control";
+    case GLFW_KEY_RIGHT_ALT: return "Right Alt";
+    case GLFW_KEY_RIGHT_SUPER: return "Right Win";
+    case GLFW_KEY_MENU: return "Menu";
+    default: return NULL;
+    }
+}
+
+extern "C" __declspec(dllexport) const char* glfwGetKeyName(int key, int) {
+    return KeyNameFromGlfwKey(key);
+}
+extern "C" __declspec(dllexport) int  glfwGetKeyScancode(int) { return 0; }
+extern "C" __declspec(dllexport) int  glfwGetKey(GLFWwindow*, int key) {
+    if (key < 0 || key >= (int)sizeof(g_key_state)) return GLFW_RELEASE;
+    return g_key_state[key] ? GLFW_PRESS : GLFW_RELEASE;
+}
+extern "C" __declspec(dllexport) int  glfwGetMouseButton(GLFWwindow*, int) { return GLFW_RELEASE; }
+extern "C" __declspec(dllexport) void glfwGetCursorPos(GLFWwindow*, double*x, double*y) { if(x)*x=0.; if(y)*y=0.; }
+extern "C" __declspec(dllexport) void glfwSetCursorPos(GLFWwindow*, double, double) {}
+extern "C" __declspec(dllexport) GLFWcursor* glfwCreateCursor(const GLFWimage*, int, int) { return (GLFWcursor*)1; }
+extern "C" __declspec(dllexport) GLFWcursor* glfwCreateStandardCursor(int) { return (GLFWcursor*)1; }
+extern "C" __declspec(dllexport) void glfwDestroyCursor(GLFWcursor*) {}
+extern "C" __declspec(dllexport) void glfwSetCursor(GLFWwindow*, GLFWcursor*) {}
+extern "C" __declspec(dllexport) const char* glfwGetClipboardString(GLFWwindow*) { return ""; }
+extern "C" __declspec(dllexport) void glfwSetClipboardString(GLFWwindow*, const char*) {}
+
+static LARGE_INTEGER g_freq, g_start;
+static BOOL g_time_init = FALSE;
+static void TimeInit() {
+    if (!g_time_init) {
+        QueryPerformanceFrequency(&g_freq);
+        QueryPerformanceCounter(&g_start);
+        g_time_init = TRUE;
+    }
+}
+extern "C" __declspec(dllexport) double glfwGetTime(void) {
+    TimeInit();
+    LARGE_INTEGER n;
+    QueryPerformanceCounter(&n);
+    return (double)(n.QuadPart - g_start.QuadPart) / (double)g_freq.QuadPart;
+}
+extern "C" __declspec(dllexport) void glfwSetTime(double) {}
+extern "C" __declspec(dllexport) uint64_t glfwGetTimerValue(void) {
+    LARGE_INTEGER v;
+    QueryPerformanceCounter(&v);
+    return (uint64_t)v.QuadPart;
+}
+extern "C" __declspec(dllexport) uint64_t glfwGetTimerFrequency(void) {
+    LARGE_INTEGER f;
+    QueryPerformanceFrequency(&f);
+    return (uint64_t)f.QuadPart;
+}
+
+extern "C" __declspec(dllexport) void glfwMakeContextCurrent(GLFWwindow* w) {
+    const DWORD tid = GetCurrentThreadId();
+    ShimLog("MakeContextCurrent %p tid=%lu previousTid=%lu", (void*)w, tid, g_eglContextThreadId);
+    if (!w) {
+        if (p_eglMakeCurrent && g_eglDisplay != EGL_NO_DISPLAY) {
+            p_eglMakeCurrent(g_eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+        }
+        if (g_eglContextThreadId == tid) {
+            g_eglContextThreadId = 0;
+        }
+        return;
+    }
+    if (!CreateEglContext()) return;
+    if (g_eglContextThreadId != 0 && g_eglContextThreadId != tid) {
+        ShimLog("eglMakeCurrent moving context from tid=%lu to tid=%lu", g_eglContextThreadId, tid);
+    }
+    if (!p_eglMakeCurrent(g_eglDisplay, g_eglSurface, g_eglSurface, g_eglContext)) {
+        ReportEglError("eglMakeCurrent");
+        return;
+    }
+    g_eglContextThreadId = tid;
+    ShimLog("eglMakeCurrent OK tid=%lu", tid);
+}
+extern "C" __declspec(dllexport) GLFWwindow* glfwGetCurrentContext(void) {
+    const DWORD tid = GetCurrentThreadId();
+    GLFWwindow* current = (g_eglContext != EGL_NO_CONTEXT && g_eglContextThreadId == tid) ? (GLFWwindow*)&g_fake_window : NULL;
+    if (g_current_context_log_count < 16) {
+        ++g_current_context_log_count;
+        ShimLog("glfwGetCurrentContext #%d tid=%lu boundTid=%lu => %p",
+            g_current_context_log_count, tid, g_eglContextThreadId, (void*)current);
+    }
+    return current;
+}
+extern "C" __declspec(dllexport) void glfwSwapBuffers(GLFWwindow*) {
+    if (g_swap_log_count < 12) {
+        ++g_swap_log_count;
+        ShimLog("glfwSwapBuffers #%d", g_swap_log_count);
+    }
+    if (!p_eglSwapBuffers || g_eglDisplay == EGL_NO_DISPLAY || g_eglSurface == EGL_NO_SURFACE) return;
+    if (!p_eglSwapBuffers(g_eglDisplay, g_eglSurface)) {
+        ReportEglError("eglSwapBuffers");
+    }
+}
+extern "C" __declspec(dllexport) void glfwSwapInterval(int i) {
+    if (p_eglSwapInterval && g_eglDisplay != EGL_NO_DISPLAY) {
+        p_eglSwapInterval(g_eglDisplay, i);
+    }
+}
+extern "C" __declspec(dllexport) int glfwExtensionSupported(const char* name) {
+    if (g_extension_log_count < 32) {
+        ++g_extension_log_count;
+        ShimLog("glfwExtensionSupported #%d %s => false",
+            g_extension_log_count, name ? name : "(null)");
+    }
+    return GLFW_FALSE;
+}
+extern "C" __declspec(dllexport) void* glfwGetProcAddress(const char* name) {
+    void* p = NULL;
+    if (g_graphicsRuntimeUsesGles && g_opengl32) p = (void*)GetProcAddress(g_opengl32, name);
+    if (!p && g_graphicsRuntimeUsesGles && g_libGLESv2) p = (void*)GetProcAddress(g_libGLESv2, name);
+    if (!p && p_eglGetProcAddress) p = p_eglGetProcAddress(name);
+    if (!p && g_opengl32) p = (void*)GetProcAddress(g_opengl32, name);
+    if (!p && g_libGLESv2) p = (void*)GetProcAddress(g_libGLESv2, name);
+    if (!p && g_libEGL) p = (void*)GetProcAddress(g_libEGL, name);
+    if (g_proc_log_count < 200) {
+        ++g_proc_log_count;
+        ShimLog("glfwGetProcAddress #%d %s => %p", g_proc_log_count, name ? name : "(null)", p);
+    }
+    return p;
+}
+
+extern "C" __declspec(dllexport) GLFWmonitor** glfwGetMonitors(int*c) {
+    static GLFWmonitor*m[] = {(GLFWmonitor*)1};
+    if(c)*c=1;
+    return m;
+}
+extern "C" __declspec(dllexport) GLFWmonitor* glfwGetPrimaryMonitor(void) { return (GLFWmonitor*)1; }
+extern "C" __declspec(dllexport) void glfwGetMonitorPos(GLFWmonitor*, int*x, int*y) { if(x)*x=0; if(y)*y=0; }
+extern "C" __declspec(dllexport) void glfwGetMonitorWorkarea(GLFWmonitor*, int*x, int*y, int*w, int*h) {
+    RefreshWindowMetrics(false);
+    if(x)*x=0; if(y)*y=0; if(w)*w=g_framebuffer_width; if(h)*h=g_framebuffer_height;
+}
+extern "C" __declspec(dllexport) void glfwGetMonitorPhysicalSize(GLFWmonitor*, int*w, int*h) { if(w)*w=527; if(h)*h=296; }
+extern "C" __declspec(dllexport) void glfwGetMonitorContentScale(GLFWmonitor*, float*x, float*y) {
+    RefreshWindowMetrics(false);
+    if(x)*x=g_content_scale_x; if(y)*y=g_content_scale_y;
+}
+extern "C" __declspec(dllexport) const char* glfwGetMonitorName(GLFWmonitor*) { return "CoreWindow Display"; }
+extern "C" __declspec(dllexport) void  glfwSetMonitorUserPointer(GLFWmonitor*, void*) {}
+extern "C" __declspec(dllexport) void* glfwGetMonitorUserPointer(GLFWmonitor*) { return NULL; }
+extern "C" __declspec(dllexport) GLFWmonitorfun glfwSetMonitorCallback(GLFWmonitorfun cb) { GLFWmonitorfun p=g_monitor_cb; g_monitor_cb=cb; return p; }
+extern "C" __declspec(dllexport) const GLFWvidmode* glfwGetVideoModes(GLFWmonitor*, int*c) { if(c)*c=1; return &g_vidmode; }
+extern "C" __declspec(dllexport) const GLFWvidmode* glfwGetVideoMode(GLFWmonitor*) { return &g_vidmode; }
+extern "C" __declspec(dllexport) void glfwSetGamma(GLFWmonitor*, float) {}
+extern "C" __declspec(dllexport) const GLFWgammaramp* glfwGetGammaRamp(GLFWmonitor*) { return NULL; }
+extern "C" __declspec(dllexport) void glfwSetGammaRamp(GLFWmonitor*, const GLFWgammaramp*) {}
+
+static bool IsSupportedJoystick(int jid) {
+    return jid == GLFW_JOYSTICK_1;
+}
+
+static void LogGamepadQuery(const char* api, int jid, bool result) {
+    if (g_gamepad_query_log_count >= 32) return;
+    ++g_gamepad_query_log_count;
+    ShimLog("%s jid=%d -> %d", api, jid, result ? 1 : 0);
+}
+
+extern "C" __declspec(dllexport) int glfwJoystickPresent(int jid) {
+    const bool result = IsSupportedJoystick(jid) && PollGameInputGamepad(false);
+    LogGamepadQuery("glfwJoystickPresent", jid, result);
+    return result ? GLFW_TRUE : GLFW_FALSE;
+}
+extern "C" __declspec(dllexport) const float* glfwGetJoystickAxes(int jid, int*c) {
+    const bool result = IsSupportedJoystick(jid) && PollGameInputGamepad(false);
+    LogGamepadQuery("glfwGetJoystickAxes", jid, result);
+    if (!result) {
+        if(c)*c=0;
+        return NULL;
+    }
+    if(c)*c=(int)(sizeof(g_joystick_axes) / sizeof(g_joystick_axes[0]));
+    return g_joystick_axes;
+}
+extern "C" __declspec(dllexport) const unsigned char* glfwGetJoystickButtons(int jid, int*c) {
+    const bool result = IsSupportedJoystick(jid) && PollGameInputGamepad(false);
+    LogGamepadQuery("glfwGetJoystickButtons", jid, result);
+    if (!result) {
+        if(c)*c=0;
+        return NULL;
+    }
+    if(c)*c=(int)(sizeof(g_joystick_buttons) / sizeof(g_joystick_buttons[0]));
+    return g_joystick_buttons;
+}
+extern "C" __declspec(dllexport) const unsigned char* glfwGetJoystickHats(int, int*c) { if(c)*c=0; return NULL; }
+extern "C" __declspec(dllexport) const char* glfwGetJoystickName(int jid) {
+    const bool result = IsSupportedJoystick(jid) && PollGameInputGamepad(false);
+    LogGamepadQuery("glfwGetJoystickName", jid, result);
+    return result ? "Xbox Controller" : NULL;
+}
+extern "C" __declspec(dllexport) const char* glfwGetJoystickGUID(int jid) {
+    const bool result = IsSupportedJoystick(jid) && PollGameInputGamepad(false);
+    LogGamepadQuery("glfwGetJoystickGUID", jid, result);
+    return result ? "030000005e0400008e02000000000000" : NULL;
+}
+extern "C" __declspec(dllexport) void  glfwSetJoystickUserPointer(int jid, void* pointer) {
+    if (jid == GLFW_JOYSTICK_1) g_joystick_user_pointer = pointer;
+}
+extern "C" __declspec(dllexport) void* glfwGetJoystickUserPointer(int jid) {
+    return jid == GLFW_JOYSTICK_1 ? g_joystick_user_pointer : NULL;
+}
+extern "C" __declspec(dllexport) int   glfwJoystickIsGamepad(int jid) {
+    const bool result = IsSupportedJoystick(jid) && PollGameInputGamepad(false);
+    LogGamepadQuery("glfwJoystickIsGamepad", jid, result);
+    return result ? GLFW_TRUE : GLFW_FALSE;
+}
+extern "C" __declspec(dllexport) GLFWjoystickfun glfwSetJoystickCallback(GLFWjoystickfun cb) {
+    GLFWjoystickfun p = g_joystick_cb;
+    g_joystick_cb = cb;
+    if (g_gamepad_query_log_count < 32) {
+        ++g_gamepad_query_log_count;
+        ShimLog("glfwSetJoystickCallback cb=%p", cb);
+    }
+    if (cb) {
+        const bool wasPresent = g_gamepad_present;
+        const bool present = PollGameInputGamepad(true);
+        if (present && wasPresent) {
+            ShimLog("glfwSetJoystickCallback immediate GLFW_CONNECTED");
+            cb(GLFW_JOYSTICK_1, GLFW_CONNECTED);
+        }
+    }
+    return p;
+}
+extern "C" __declspec(dllexport) int  glfwUpdateGamepadMappings(const char*) { return GLFW_TRUE; }
+extern "C" __declspec(dllexport) const char* glfwGetGamepadName(int jid) {
+    const bool result = IsSupportedJoystick(jid) && PollGameInputGamepad(false);
+    LogGamepadQuery("glfwGetGamepadName", jid, result);
+    return result ? "Xbox Controller" : NULL;
+}
+extern "C" __declspec(dllexport) int  glfwGetGamepadState(int jid, GLFWgamepadstate* state) {
+    const bool result = state && IsSupportedJoystick(jid) && PollGameInputGamepad(false);
+    LogGamepadQuery("glfwGetGamepadState", jid, result);
+    if (!result) {
+        return GLFW_FALSE;
+    }
+    memcpy(state, &g_gamepad_state, sizeof(g_gamepad_state));
+    return GLFW_TRUE;
+}
+
+extern "C" __declspec(dllexport) HWND  glfwGetWin32Window(GLFWwindow*) { return NULL; }
+extern "C" __declspec(dllexport) void* glfwGetWGLContext(GLFWwindow*) { return NULL; }
+
+typedef struct { void* allocate; void* reallocate; void* deallocate; void* user; } GLFWallocator;
+extern "C" __declspec(dllexport) void glfwInitAllocator(const GLFWallocator*) {}
+
+extern "C" __declspec(dllexport) int   glfwVulkanSupported(void) { return GLFW_FALSE; }
+extern "C" __declspec(dllexport) void* glfwGetInstanceProcAddress(void*, const char*) { return NULL; }
+extern "C" __declspec(dllexport) int   glfwGetPhysicalDevicePresentationSupport(void*, void*, unsigned int) { return GLFW_FALSE; }
+extern "C" __declspec(dllexport) int   glfwCreateWindowSurface(void*, GLFWwindow*, const void*, void*) { return 1; }
+extern "C" __declspec(dllexport) const char** glfwGetRequiredInstanceExtensions(unsigned int* c) { if(c)*c=0; return NULL; }
+
+extern "C" __declspec(dllexport) void* glfwGetEGLDisplay(void) { return g_eglDisplay; }
+extern "C" __declspec(dllexport) void* glfwGetEGLContext(GLFWwindow*) { return g_eglContext; }
+extern "C" __declspec(dllexport) void* glfwGetEGLSurface(GLFWwindow*) { return g_eglSurface; }
+extern "C" __declspec(dllexport) void* glfwGetEGLConfig(GLFWwindow*) { return g_eglConfig; }
+
+extern "C" __declspec(dllexport) int glfwGetOSMesaColorBuffer(GLFWwindow*, int*, int*, int*, void**) { return GLFW_FALSE; }
+extern "C" __declspec(dllexport) int glfwGetOSMesaDepthBuffer(GLFWwindow*, int*, int*, int*, void**) { return GLFW_FALSE; }
+extern "C" __declspec(dllexport) void* glfwGetOSMesaContext(GLFWwindow*) { return NULL; }
+
+extern "C" __declspec(dllexport) const char* glfwGetWin32Adapter(GLFWmonitor*) { return NULL; }
+extern "C" __declspec(dllexport) const char* glfwGetWin32Monitor(GLFWmonitor*) { return NULL; }
