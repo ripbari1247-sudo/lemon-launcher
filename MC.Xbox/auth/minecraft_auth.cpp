@@ -281,3 +281,12 @@ bool BuildMinecraftAuth(const std::string& microsoftAccessToken, LaunchAuthConfi
         a2w(out.uuid.c_str()).c_str());
     return true;
 }
+
+void CreateOfflineAccount(LaunchAuthConfig& out, const std::wstring& username) {
+    std::string usernameA = w2a(username);
+    out.username = usernameA;
+    out.uuid = "offline-" + usernameA;
+    out.accessToken = "offline";
+    out.isOffline = true;
+    WriteLogF(L"Created offline account username=%s", username.c_str());
+}

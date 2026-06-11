@@ -378,6 +378,13 @@ public:
             if (menuAction == MainMenuAction::Play) {
                 break;
             }
+            if (menuAction == MainMenuAction::PlayOffline) {
+                // Create an offline account and proceed to play
+                CreateOfflineAccount(authConfig, L"OfflinePlayer");
+                authConfig.isOffline = true;
+                WriteLog(L"Playing in offline mode");
+                break;
+            }
             if (menuAction == MainMenuAction::RepairDownloads) {
                 repairDownloads = true;
                 break;
