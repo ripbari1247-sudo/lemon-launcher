@@ -53,3 +53,4 @@ bool LoginToMinecraft(const std::string& userHash, const std::string& xstsToken,
 bool EnsureMinecraftEntitlement(const std::string& minecraftAccessToken, std::string& error);
 bool FetchMinecraftProfile(const std::string& minecraftAccessToken, LaunchAuthConfig& out, std::string& error);
 bool BuildMinecraftAuth(const std::string& microsoftAccessToken, LaunchAuthConfig& out, std::string& error);
+bool BuildOfflineAuthConfig(const std::string& desiredUsername, LaunchAuthConfig& out);

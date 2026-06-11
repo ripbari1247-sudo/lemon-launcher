@@ -5,11 +5,30 @@
 
 #include <winrt/base.h>
 #include <winrt/Windows.Security.Credentials.h>
+#include <sstream>
+#include <iomanip>
+#include <functional>
 
 static constexpr char kMicrosoftAuthClientId[] = "c36a9fb6-4f2a-41ff-90bd-ae7cc92031eb";
 static constexpr char kMicrosoftAuthScopes[] = "XboxLive.signin offline_access";
 static constexpr wchar_t kRefreshTokenResource[] = L"MinecraftJavaUWP.MicrosoftRefreshToken";
 static constexpr wchar_t kRefreshTokenUser[] = L"default";
+
+// Simple hash function to generate a consistent UUID from a username
+static std::string GenerateOfflineUuid(const std::string& username) {
+    std::hash<std::string> hasher;
+    size_t hash = hasher(username);
+    
+    std::stringstream ss;
+    ss << std::hex << std::setfill('0');
+    ss << std::setw(8) << (hash & 0xFFFFFFFF) << "-";
+    ss << std::setw(4) << ((hash >> 16) & 0xFFFF) << "-";
+    ss << "4" << std::setw(3) << ((hash >> 32) & 0x0FFF) << "-"; // Version 4 UUID marker
+    ss << std::setw(4) << ((hash >> 48) & 0xFFFF) << "-";
+    ss << std::setw(12) << (hash & 0xFFFFFFFFFFFFULL);
+    
+    return ss.str();
+}
 
 bool SaveRefreshToken(const std::string& refreshToken) {
     if (refreshToken.empty()) return false;
@@ -59,7 +78,7 @@ bool RequestDeviceCode(DeviceCodeResponse& out, std::string& error) {
         { "scope", kMicrosoftAuthScopes }
     });
     const HttpResult response = HttpPostString(
-        L"https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode",
+        L"https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode ",
         body,
         L"application/x-www-form-urlencoded");
     if (!response.success()) {
@@ -91,7 +110,7 @@ DevicePollResult PollDeviceToken(const std::string& deviceCode) {
         { "device_code", deviceCode }
     });
     const HttpResult response = HttpPostString(
-        L"https://login.microsoftonline.com/consumers/oauth2/v2.0/token",
+        L"https://login.microsoftonline.com/consumers/oauth2/v2.0/token ",
         body,
         L"application/x-www-form-urlencoded");
 
@@ -129,7 +148,7 @@ bool RefreshMicrosoftToken(const std::string& refreshToken, MicrosoftTokenRespon
         { "scope", kMicrosoftAuthScopes }
     });
     const HttpResult response = HttpPostString(
-        L"https://login.microsoftonline.com/consumers/oauth2/v2.0/token",
+        L"https://login.microsoftonline.com/consumers/oauth2/v2.0/token ",
         body,
         L"application/x-www-form-urlencoded");
     if (!response.success()) {
@@ -153,7 +172,7 @@ bool AuthenticateWithXboxLive(const std::string& microsoftAccessToken, XboxAuthR
         JsonEscape(microsoftAccessToken) +
         "\"},\"RelyingParty\":\"http://auth.xboxlive.com\",\"TokenType\":\"JWT\"}";
     const HttpResult response = HttpPostString(
-        L"https://user.auth.xboxlive.com/user/authenticate",
+        L"https://user.auth.xboxlive.com/user/authenticate ",
         payload,
         L"application/json");
     if (!response.success()) {
@@ -178,7 +197,7 @@ bool AuthorizeWithXsts(const std::string& xboxToken, const char* relyingParty, X
         JsonEscape(relyingParty) +
         "\",\"TokenType\":\"JWT\"}";
     const HttpResult response = HttpPostString(
-        L"https://xsts.auth.xboxlive.com/xsts/authorize",
+        L"https://xsts.auth.xboxlive.com/xsts/authorize ",
         payload,
         L"application/json");
     if (!response.success()) {
@@ -199,7 +218,7 @@ bool LoginToMinecraft(const std::string& userHash, const std::string& xstsToken,
     const std::string identity = "XBL3.0 x=" + userHash + ";" + xstsToken;
     const std::string payload = "{\"identityToken\":\"" + JsonEscape(identity) + "\"}";
     const HttpResult response = HttpPostString(
-        L"https://api.minecraftservices.com/authentication/login_with_xbox",
+        L"https://api.minecraftservices.com/authentication/login_with_xbox ",
         payload,
         L"application/json");
     if (!response.success()) {
@@ -218,7 +237,7 @@ bool LoginToMinecraft(const std::string& userHash, const std::string& xstsToken,
 
 bool EnsureMinecraftEntitlement(const std::string& minecraftAccessToken, std::string& error) {
     const HttpResult response = HttpGetBearer(
-        L"https://api.minecraftservices.com/entitlements/mcstore",
+        L"https://api.minecraftservices.com/entitlements/mcstore ",
         minecraftAccessToken);
     if (!response.success()) {
         error = "Minecraft entitlement check failed: HTTP " + std::to_string(response.status) + " " + response.body;
@@ -235,7 +254,7 @@ bool EnsureMinecraftEntitlement(const std::string& minecraftAccessToken, std::st
 
 bool FetchMinecraftProfile(const std::string& minecraftAccessToken, LaunchAuthConfig& out, std::string& error) {
     const HttpResult response = HttpGetBearer(
-        L"https://api.minecraftservices.com/minecraft/profile",
+        L"https://api.minecraftservices.com/minecraft/profile ",
         minecraftAccessToken);
     if (!response.success()) {
         error = "Minecraft profile request failed: HTTP " + std::to_string(response.status) + " " + response.body;
@@ -279,5 +298,23 @@ bool BuildMinecraftAuth(const std::string& microsoftAccessToken, LaunchAuthConfi
     WriteLogF(L"Minecraft auth resolved username=%s uuid=%s",
         a2w(out.username.c_str()).c_str(),
         a2w(out.uuid.c_str()).c_str());
+    return true;
+}
+
+// Implementation of Offline Auth
+bool BuildOfflineAuthConfig(const std::string& username, LaunchAuthConfig& out) {
+    if (username.empty()) {
+        return false;
+    }
+
+    out.username = username;
+    out.uuid = GenerateOfflineUuid(username);
+    out.accessToken = "offline_token_" + username; // Dummy token
+    out.isOffline = true;
+
+    WriteLogF(L"Offline auth configured username=%s uuid=%s",
+        a2w(out.username.c_str()).c_str(),
+        a2w(out.uuid.c_str()).c_str());
+    
     return true;
 }
